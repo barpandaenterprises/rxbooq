@@ -1,0 +1,55 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+Thumbs.db
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# storybook
+storybook-static/
+
+# editor
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# supabase local artifacts
+/supabase/.branches
+/supabase/.temp
+
+# Poppins fonts (download separately, not committed)
+/src/app/fonts/*.woff2
+/src/app/fonts/*.woff
+/src/app/fonts/*.ttf
+/src/app/fonts/*.otf

@@ -1,0 +1,7 @@
+This folder is empty by default.
+
+Poppins is loaded via `next/font/google` (see ../fonts.ts) — Next.js downloads
+and self-hosts the font files at build time, so no manual files are needed.
+
+Drop Poppins woff2 files here ONLY if you switch fonts.ts back to
+`next/font/local` for full air-gap (zero build-time external calls).

@@ -1,0 +1,66 @@
+@import "./tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-text-body);
+    background: var(--color-bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+
+  body {
+    @apply text-body;
+  }
+
+  h1 { @apply text-h1 text-heading; }
+  h2 { @apply text-h2 text-heading; }
+  h3 { @apply text-h3 text-heading; }
+  h4 { @apply text-h4 text-heading; }
+  p  { @apply text-paragraph; }
+  a  { @apply text-link hover:text-link-hover transition-colors; }
+
+  /* Better focus rings */
+  :focus-visible {
+    @apply outline-none ring-2 ring-cta ring-offset-2 ring-offset-surface;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply container mx-auto px-4 md:px-8 lg:px-16;
+  }
+
+  /* Hatched placeholder used in lieu of real photos in the public site
+     prototypes — keeps the layout faithful to the design until images
+     are wired in. */
+  .image-placeholder {
+    background:
+      repeating-linear-gradient(135deg,
+        rgba(1, 104, 179, 0.06) 0 14px,
+        rgba(1, 104, 179, 0.10) 14px 28px);
+    color: var(--color-link-hover);
+  }
+
+  .image-placeholder-warm {
+    background:
+      repeating-linear-gradient(135deg,
+        rgba(238, 52, 78, 0.06) 0 14px,
+        rgba(238, 52, 78, 0.10) 14px 28px);
+    color: #b8253a;
+  }
+
+  .image-placeholder-label {
+    @apply rounded-sm border border-black/5 bg-white/85 px-2.5 py-1 text-[11px] uppercase tracking-[0.06em];
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+}

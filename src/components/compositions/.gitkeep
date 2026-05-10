@@ -1,0 +1,2 @@
+Screen-level compositions live here (Hero, BookingSlotPicker, PatientsTable, …).
+Compositions are pure presentational — props in, JSX out. No Supabase imports.

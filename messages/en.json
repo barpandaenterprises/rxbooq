@@ -1,0 +1,23 @@
+{
+  "common": {
+    "book_appointment": "Book Appointment",
+    "call_now": "Call Now",
+    "contact_us": "Contact Us",
+    "read_more": "Read More",
+    "back": "Back",
+    "continue": "Continue",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save"
+  },
+  "home": {
+    "hero_title": "Trusted dental care in Sambalpur for over 20 years",
+    "hero_sub": "Modern equipment, painless treatment, online booking on WhatsApp."
+  },
+  "book": {
+    "step1_title": "Pick a service",
+    "step2_title": "Choose a time",
+    "step3_title": "Your details",
+    "success_title": "You're booked!"
+  }
+}

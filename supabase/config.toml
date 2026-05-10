@@ -1,0 +1,38 @@
+# Supabase local config. See https://supabase.com/docs/guides/cli/config
+project_id = "doctorkart"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://*.doctorkart.in"]
+
+[auth.email]
+enable_signup = true
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = false
+template = "Your Doctor Kart verification code is {{ .Code }}"
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
