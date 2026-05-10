@@ -1,3 +1,9 @@
+"use client";
+
+import * as Popover from "@radix-ui/react-popover";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { useMemo, useState } from "react";
+
 type Lang = "EN" | "HI" | "OR";
 
 type Patient = {
@@ -8,27 +14,30 @@ type Patient = {
   avatarFg: string;
   phone: string;
   lang: Lang;
-  lastVisit: string;
+  lastVisit: string; // ISO YYYY-MM-DD for sort
+  lastVisitLabel: string; // "9 May 2026"
   visits: number;
-  ltv: string;
+  ltv: number;
   tags: string[];
   wa: boolean;
 };
 
 const PATIENTS: Patient[] = [
-  { id: "P-1284", name: "Anita Sahu",      initials: "AS", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 98••• ••342", lang: "EN", lastVisit: "9 May 2026",  visits: 7,  ltv: "12,400", tags: ["VIP", "Root canal"], wa: true },
-  { id: "P-1283", name: "Bidyut Panda",    initials: "BP", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 96••• ••018", lang: "OR", lastVisit: "9 May 2026",  visits: 1,  ltv: "1,200",  tags: ["New"],          wa: true },
-  { id: "P-1281", name: "Sarita Mahanti",  initials: "SM", avatarBg: "#FFF8EC", avatarFg: "#7a5c2b", phone: "+91 99••• ••445", lang: "HI", lastVisit: "2 May 2026",  visits: 4,  ltv: "8,600",  tags: ["No-show"],      wa: true },
-  { id: "P-1278", name: "Manoj Behera",    initials: "MB", avatarBg: "#E6F4EC", avatarFg: "#3a8b5e", phone: "+91 95••• ••111", lang: "OR", lastVisit: "28 Apr 2026", visits: 2,  ltv: "4,200",  tags: ["Implants"],     wa: true },
-  { id: "P-1276", name: "Rajesh Mishra",   initials: "RM", avatarBg: "#F4E5FA", avatarFg: "#6b3aa1", phone: "+91 94••• ••111", lang: "HI", lastVisit: "24 Apr 2026", visits: 3,  ltv: "3,800",  tags: [],               wa: false },
-  { id: "P-1273", name: "Karthik Rao",     initials: "KR", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 70••• ••144", lang: "EN", lastVisit: "20 Apr 2026", visits: 5,  ltv: "9,750",  tags: ["Root canal"],   wa: true },
-  { id: "P-1271", name: "Pinky Sahu",      initials: "PS", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 87••• ••501", lang: "OR", lastVisit: "18 Apr 2026", visits: 6,  ltv: "2,100",  tags: ["Pediatric"],    wa: true },
-  { id: "P-1268", name: "Susmita Dash",    initials: "SD", avatarBg: "#FFF8EC", avatarFg: "#7a5c2b", phone: "+91 99••• ••015", lang: "EN", lastVisit: "15 Apr 2026", visits: 9,  ltv: "18,300", tags: ["VIP"],          wa: true },
-  { id: "P-1265", name: "Suresh Pati",     initials: "SP", avatarBg: "#E6F4EC", avatarFg: "#3a8b5e", phone: "+91 89••• ••445", lang: "OR", lastVisit: "12 Apr 2026", visits: 14, ltv: "24,500", tags: ["Braces"],       wa: true },
-  { id: "P-1262", name: "Laxmi Pradhan",   initials: "LP", avatarBg: "#F4E5FA", avatarFg: "#6b3aa1", phone: "+91 90••• ••512", lang: "HI", lastVisit: "8 Apr 2026",  visits: 2,  ltv: "2,800",  tags: ["Cancelled"],    wa: false },
-  { id: "P-1259", name: "Priya Sahu",      initials: "PS", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 93••• ••901", lang: "OR", lastVisit: "7 Apr 2026",  visits: 3,  ltv: "5,400",  tags: ["Root canal"],   wa: true },
-  { id: "P-1257", name: "Anita Mohanti",   initials: "AM", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 98••• ••611", lang: "EN", lastVisit: "5 Apr 2026",  visits: 8,  ltv: "14,200", tags: [],               wa: true },
+  { id: "P-1284", name: "Anita Sahu",      initials: "AS", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 98••• ••342", lang: "EN", lastVisit: "2026-05-09", lastVisitLabel: "9 May 2026",  visits: 7,  ltv: 12400, tags: ["VIP", "Root canal"], wa: true },
+  { id: "P-1283", name: "Bidyut Panda",    initials: "BP", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 96••• ••018", lang: "OR", lastVisit: "2026-05-09", lastVisitLabel: "9 May 2026",  visits: 1,  ltv: 1200,  tags: ["New"],          wa: true },
+  { id: "P-1281", name: "Sarita Mahanti",  initials: "SM", avatarBg: "#FFF8EC", avatarFg: "#7a5c2b", phone: "+91 99••• ••445", lang: "HI", lastVisit: "2026-05-02", lastVisitLabel: "2 May 2026",  visits: 4,  ltv: 8600,  tags: ["No-show"],      wa: true },
+  { id: "P-1278", name: "Manoj Behera",    initials: "MB", avatarBg: "#E6F4EC", avatarFg: "#3a8b5e", phone: "+91 95••• ••111", lang: "OR", lastVisit: "2026-04-28", lastVisitLabel: "28 Apr 2026", visits: 2,  ltv: 4200,  tags: ["Implants"],     wa: true },
+  { id: "P-1276", name: "Rajesh Mishra",   initials: "RM", avatarBg: "#F4E5FA", avatarFg: "#6b3aa1", phone: "+91 94••• ••111", lang: "HI", lastVisit: "2026-04-24", lastVisitLabel: "24 Apr 2026", visits: 3,  ltv: 3800,  tags: [],               wa: false },
+  { id: "P-1273", name: "Karthik Rao",     initials: "KR", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 70••• ••144", lang: "EN", lastVisit: "2026-04-20", lastVisitLabel: "20 Apr 2026", visits: 5,  ltv: 9750,  tags: ["Root canal"],   wa: true },
+  { id: "P-1271", name: "Pinky Sahu",      initials: "PS", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 87••• ••501", lang: "OR", lastVisit: "2026-04-18", lastVisitLabel: "18 Apr 2026", visits: 6,  ltv: 2100,  tags: ["Pediatric"],    wa: true },
+  { id: "P-1268", name: "Susmita Dash",    initials: "SD", avatarBg: "#FFF8EC", avatarFg: "#7a5c2b", phone: "+91 99••• ••015", lang: "EN", lastVisit: "2026-04-15", lastVisitLabel: "15 Apr 2026", visits: 9,  ltv: 18300, tags: ["VIP"],          wa: true },
+  { id: "P-1265", name: "Suresh Pati",     initials: "SP", avatarBg: "#E6F4EC", avatarFg: "#3a8b5e", phone: "+91 89••• ••445", lang: "OR", lastVisit: "2026-04-12", lastVisitLabel: "12 Apr 2026", visits: 14, ltv: 24500, tags: ["Braces"],       wa: true },
+  { id: "P-1262", name: "Laxmi Pradhan",   initials: "LP", avatarBg: "#F4E5FA", avatarFg: "#6b3aa1", phone: "+91 90••• ••512", lang: "HI", lastVisit: "2026-04-08", lastVisitLabel: "8 Apr 2026",  visits: 2,  ltv: 2800,  tags: ["Cancelled"],    wa: false },
+  { id: "P-1259", name: "Priya Sahu",      initials: "PS", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 93••• ••901", lang: "OR", lastVisit: "2026-04-07", lastVisitLabel: "7 Apr 2026",  visits: 3,  ltv: 5400,  tags: ["Root canal"],   wa: true },
+  { id: "P-1257", name: "Anita Mohanti",   initials: "AM", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 98••• ••611", lang: "EN", lastVisit: "2026-04-05", lastVisitLabel: "5 Apr 2026",  visits: 8,  ltv: 14200, tags: [],               wa: true },
 ];
+
+const ALL_TAGS = ["VIP", "New", "No-show", "Root canal", "Implants", "Pediatric", "Braces", "Cancelled"];
 
 const TAG_COLOR: Record<string, { bg: string; fg: string }> = {
   "VIP":         { bg: "#FFE7EC", fg: "#EE344E" },
@@ -46,6 +55,35 @@ const LANG_PILL: Record<Lang, { bg: string; fg: string }> = {
   HI: { bg: "#FFF1D6", fg: "#7a5c2b" },
   OR: { bg: "#E6F1FA", fg: "#0E5087" },
 };
+
+const LANG_OPTIONS: Array<{ value: Lang | "all"; label: string }> = [
+  { value: "all", label: "All languages" },
+  { value: "EN", label: "English" },
+  { value: "HI", label: "हिंदी" },
+  { value: "OR", label: "ଓଡ଼ିଆ" },
+];
+
+const VISIT_OPTIONS: Array<{ value: VisitWindow; label: string }> = [
+  { value: "any",  label: "Any time" },
+  { value: "30d",  label: "Last 30 days" },
+  { value: "90d",  label: "Last 90 days" },
+  { value: "180d", label: "Last 6 months" },
+];
+
+type VisitWindow = "any" | "30d" | "90d" | "180d";
+type SortKey = "name" | "lastVisit" | "visits" | "ltv";
+type SortDir = "asc" | "desc";
+
+const PAGE_SIZE = 5;
+
+function visitWithinWindow(iso: string, window: VisitWindow): boolean {
+  if (window === "any") return true;
+  const days = window === "30d" ? 30 : window === "90d" ? 90 : 180;
+  const visit = new Date(iso);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return visit >= cutoff;
+}
 
 function TagChip({ t }: { t: string }) {
   const c = TAG_COLOR[t] ?? { bg: "#F4F5F7", fg: "#575757" };
@@ -71,139 +109,182 @@ function LangPill({ l }: { l: Lang }) {
   );
 }
 
-function FilterPill({ label, value, active }: { label: string; value: string; active?: boolean }) {
+function PatientRowMenu({ patientName }: { patientName: string }) {
+  const items = [
+    { ic: "fa-eye",          label: "View profile" },
+    { ic: "fa-pen",          label: "Edit details" },
+    { ic: "fab fa-whatsapp", label: "Send WhatsApp", wa: true },
+    { ic: "fa-tag",          label: "Add tag" },
+    { ic: "fa-archive",      label: "Archive", danger: true },
+  ];
   return (
-    <button
-      type="button"
-      className={
-        "inline-flex items-center gap-2 rounded-md px-3 py-2 text-[13px] " +
-        (active
-          ? "border-[1.5px] border-brand bg-[#E6F1FA] font-medium text-link-hover"
-          : "border border-border bg-white text-heading")
-      }
-    >
-      <span className="text-[#9aa9b8]">{label}:</span>
-      <span>{value}</span>
-      <i className="fas fa-chevron-down text-[10px] text-[#9aa9b8]" />
-    </button>
-  );
-}
-
-function FilterToggle({ on, label }: { on: boolean; label: React.ReactNode }) {
-  return (
-    <label className="inline-flex cursor-pointer items-center gap-2.5 rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading">
-      <span
-        className="relative h-[18px] w-8 rounded-pill transition-colors"
-        style={{ background: on ? "#0168B3" : "#cdd9e4" }}
-      >
-        <span
-          className="absolute top-0.5 h-3.5 w-3.5 rounded-pill bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)] transition-[left]"
-          style={{ left: on ? "16px" : "2px" }}
-        />
-      </span>
-      {label}
-    </label>
-  );
-}
-
-function PatientRow({ p, hover }: { p: Patient; hover?: boolean }) {
-  return (
-    <tr
-      className="border-b border-[#F4F5F7]"
-      style={{
-        background: hover ? "#FFFAFB" : "#fff",
-        boxShadow: hover ? "inset 3px 0 0 #EE344E" : "none",
-      }}
-    >
-      <td className="w-8 px-3 py-3.5 pl-4">
-        <span className="inline-block h-[18px] w-[18px] rounded-sm border-[1.5px] border-[#cdd9e4]" />
-      </td>
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-2.5">
-          <span
-            className="grid h-9 w-9 place-items-center rounded-pill text-[13px] font-semibold"
-            style={{ background: p.avatarBg, color: p.avatarFg }}
-          >
-            {p.initials}
-          </span>
-          <div>
-            <div className="text-[14px] font-semibold text-heading">{p.name}</div>
-            <div className="font-mono text-[11px] text-[#9aa9b8]">{p.id}</div>
-          </div>
-        </div>
-      </td>
-      <td className="px-3 py-3 text-[13px] text-heading">
-        <div className="flex items-center gap-1.5">
-          {p.phone}
-          {p.wa && <i className="fab fa-whatsapp text-[13px] text-[#25D366]" />}
-        </div>
-      </td>
-      <td className="px-3 py-3"><LangPill l={p.lang} /></td>
-      <td className="px-3 py-3 text-[13px] text-muted">{p.lastVisit}</td>
-      <td className="px-3 py-3 text-right text-[13px] text-heading">{p.visits}</td>
-      <td className="px-3 py-3 text-right text-[13px] font-semibold text-heading">₹{p.ltv}</td>
-      <td className="px-3 py-3">
-        <div className="flex flex-wrap gap-1">
-          {p.tags.length === 0 ? (
-            <span className="text-[12px] text-[#cdd9e4]">—</span>
-          ) : (
-            p.tags.map((t) => <TagChip key={t} t={t} />)
-          )}
-        </div>
-      </td>
-      <td className="px-3 py-3 pr-4 text-right">
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
         <button
           type="button"
-          aria-label="More"
-          className="grid h-8 w-8 place-items-center rounded-md border border-border bg-white text-muted"
+          aria-label={`Actions for ${patientName}`}
+          className="grid h-8 w-8 cursor-pointer place-items-center rounded-md border border-border bg-white text-muted hover:text-link-hover"
         >
           <i className="fas fa-ellipsis-v text-[13px]" />
         </button>
-      </td>
-    </tr>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={4}
+          className="z-50 w-[200px] rounded-md border border-border bg-white p-1.5 shadow-md"
+        >
+          {items.map((it) => (
+            <DropdownMenu.Item
+              key={it.label}
+              className={
+                "flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] outline-none hover:bg-surface-muted " +
+                (it.danger ? "text-cta" : "text-heading")
+              }
+            >
+              <i
+                className={(it.wa ? "fab " : "fas ") + it.ic + " w-4 text-center text-[12px]"}
+                style={{ color: it.wa ? "#25D366" : it.danger ? "#EE344E" : "#575757" }}
+              />
+              {it.label}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }
 
-function MobileCard({ p }: { p: Patient }) {
+function FilterPill({
+  label,
+  value,
+  active,
+  open,
+  onOpenChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  active?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex items-start gap-3 rounded-[12px] border border-border bg-white p-3.5">
-      <span
-        className="grid h-10 w-10 flex-none place-items-center rounded-pill text-[14px] font-semibold"
-        style={{ background: p.avatarBg, color: p.avatarFg }}
-      >
-        {p.initials}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="mb-0.5 flex items-center gap-2">
-          <div className="text-[14px] font-semibold text-heading">{p.name}</div>
-          {p.wa && <i className="fab fa-whatsapp text-[12px] text-[#25D366]" />}
-          <LangPill l={p.lang} />
-        </div>
-        <div className="flex items-center gap-1.5 text-[12px] text-muted">
-          <i className="fas fa-phone text-[10px] text-[#9aa9b8]" />
-          {p.phone}
-        </div>
-        <div className="mt-0.5 text-[11px] text-[#9aa9b8]">
-          Last visit · {p.lastVisit} · {p.visits} visits
-        </div>
-        {p.tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {p.tags.map((t) => <TagChip key={t} t={t} />)}
-          </div>
-        )}
-      </div>
-      <button
-        type="button"
-        aria-label="More"
-        className="grid h-8 w-8 flex-none place-items-center rounded-md border border-border bg-white text-muted"
-      >
-        <i className="fas fa-ellipsis-v text-[12px]" />
-      </button>
-    </div>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className={
+            "inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-[13px] " +
+            (active
+              ? "border-[1.5px] border-brand bg-[#E6F1FA] font-medium text-link-hover"
+              : "border border-border bg-white text-heading hover:border-link-hover")
+          }
+        >
+          <span className="text-[#9aa9b8]">{label}:</span>
+          <span>{value}</span>
+          <i className="fas fa-chevron-down text-[10px] text-[#9aa9b8]" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={6}
+          className="z-50 w-[220px] rounded-md border border-border bg-white p-1.5 shadow-md"
+        >
+          {children}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
 export function AdminPatients() {
+  const [search, setSearch] = useState("");
+  const [lang, setLang] = useState<Lang | "all">("all");
+  const [tags, setTags] = useState<Set<string>>(new Set());
+  const [visitWindow, setVisitWindow] = useState<VisitWindow>("any");
+  const [waOnly, setWaOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<SortKey>("lastVisit");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(1);
+
+  const [openLang, setOpenLang] = useState(false);
+  const [openTags, setOpenTags] = useState(false);
+  const [openVisit, setOpenVisit] = useState(false);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const qDigits = search.replace(/\D/g, "");
+    return PATIENTS.filter((p) => {
+      if (q.length > 0) {
+        const matchesName = p.name.toLowerCase().includes(q);
+        const matchesPhone = qDigits.length > 0 && p.phone.replace(/\D/g, "").includes(qDigits);
+        if (!matchesName && !matchesPhone) return false;
+      }
+      if (lang !== "all" && p.lang !== lang) return false;
+      if (tags.size > 0 && !p.tags.some((t) => tags.has(t))) return false;
+      if (!visitWithinWindow(p.lastVisit, visitWindow)) return false;
+      if (waOnly && !p.wa) return false;
+      return true;
+    });
+  }, [search, lang, tags, visitWindow, waOnly]);
+
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      switch (sortBy) {
+        case "name":      return dir * a.name.localeCompare(b.name);
+        case "lastVisit": return dir * a.lastVisit.localeCompare(b.lastVisit);
+        case "visits":    return dir * (a.visits - b.visits);
+        case "ltv":       return dir * (a.ltv - b.ltv);
+      }
+    });
+    return arr;
+  }, [filtered, sortBy, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * PAGE_SIZE;
+  const visible = sorted.slice(start, start + PAGE_SIZE);
+
+  const activeFilterCount =
+    (lang !== "all" ? 1 : 0) +
+    (tags.size > 0 ? 1 : 0) +
+    (visitWindow !== "any" ? 1 : 0) +
+    (waOnly ? 1 : 0);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortBy === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortDir(key === "name" ? "asc" : "desc");
+    }
+    setPage(1);
+  };
+
+  const toggleTag = (t: string) => {
+    setTags((prev) => {
+      const next = new Set(prev);
+      if (next.has(t)) next.delete(t);
+      else next.add(t);
+      return next;
+    });
+    setPage(1);
+  };
+
+  const clearAll = () => {
+    setSearch("");
+    setLang("all");
+    setTags(new Set());
+    setVisitWindow("any");
+    setWaOnly(false);
+    setPage(1);
+  };
+
   return (
     <div className="px-5 pt-7 md:px-8 md:pt-8">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -212,7 +293,7 @@ export function AdminPatients() {
             Patients
           </h2>
           <div className="mt-1 text-[14px] text-muted">
-            <strong className="text-heading">1,284 patients</strong>
+            <strong className="text-heading">{PATIENTS.length} patients</strong>
             <span className="mx-2 text-[#9aa9b8]">·</span>
             18 added this week
             <span className="mx-2 text-[#9aa9b8]">·</span>
@@ -237,46 +318,183 @@ export function AdminPatients() {
 
       {/* Filter row (desktop) */}
       <div className="mb-4 hidden flex-wrap items-center gap-2.5 md:flex">
-        <div className="flex w-[280px] items-center gap-2.5 rounded-md border border-border bg-white px-3.5 py-2.5">
+        <div className="flex w-[280px] items-center gap-2.5 rounded-md border border-border bg-white px-3.5 py-2.5 focus-within:border-link-hover">
           <i className="fas fa-search text-[13px] text-[#9aa9b8]" />
-          <span className="text-[14px] text-[#9aa9b8]">Search by name or phone…</span>
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search by name or phone…"
+            className="w-full bg-transparent text-[14px] text-heading outline-none placeholder:text-[#9aa9b8]"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setPage(1);
+              }}
+              className="text-[12px] text-muted hover:text-heading"
+              aria-label="Clear search"
+            >
+              <i className="fas fa-times" />
+            </button>
+          )}
         </div>
-        <FilterPill label="Language" value="All" />
-        <FilterPill label="Tags" value="2 selected" active />
-        <FilterPill label="Last visit" value="Last 90 days" />
-        <FilterToggle
-          on
-          label={
-            <span>
-              <i className="fab fa-whatsapp mr-1.5 text-[#25D366]" />
-              Has WhatsApp opt-in
-            </span>
-          }
-        />
-        <button type="button" className="text-[13px] text-link-hover underline underline-offset-[3px]">
-          Clear filters
-        </button>
+
+        <FilterPill
+          label="Language"
+          value={LANG_OPTIONS.find((o) => o.value === lang)?.label ?? "All"}
+          active={lang !== "all"}
+          open={openLang}
+          onOpenChange={setOpenLang}
+        >
+          {LANG_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => {
+                setLang(o.value);
+                setOpenLang(false);
+                setPage(1);
+              }}
+              className={
+                "flex w-full cursor-pointer items-center justify-between rounded-sm px-2.5 py-2 text-left text-[13px] hover:bg-surface-muted " +
+                (lang === o.value ? "font-semibold text-link-hover" : "text-heading")
+              }
+            >
+              {o.label}
+              {lang === o.value && <i className="fas fa-check text-[11px] text-link-hover" />}
+            </button>
+          ))}
+        </FilterPill>
+
+        <FilterPill
+          label="Tags"
+          value={tags.size === 0 ? "Any" : `${tags.size} selected`}
+          active={tags.size > 0}
+          open={openTags}
+          onOpenChange={setOpenTags}
+        >
+          <div className="mb-1 flex items-center justify-between px-2 pt-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Tags</span>
+            {tags.size > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTags(new Set());
+                  setPage(1);
+                }}
+                className="text-[11px] text-link-hover"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="max-h-60 overflow-y-auto">
+            {ALL_TAGS.map((t) => {
+              const checked = tags.has(t);
+              return (
+                <label
+                  key={t}
+                  className="flex cursor-pointer items-center gap-2 rounded-sm px-2.5 py-1.5 text-[13px] hover:bg-surface-muted"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleTag(t)}
+                    className="h-4 w-4 cursor-pointer accent-brand"
+                  />
+                  <TagChip t={t} />
+                </label>
+              );
+            })}
+          </div>
+        </FilterPill>
+
+        <FilterPill
+          label="Last visit"
+          value={VISIT_OPTIONS.find((o) => o.value === visitWindow)?.label ?? "Any"}
+          active={visitWindow !== "any"}
+          open={openVisit}
+          onOpenChange={setOpenVisit}
+        >
+          {VISIT_OPTIONS.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => {
+                setVisitWindow(o.value);
+                setOpenVisit(false);
+                setPage(1);
+              }}
+              className={
+                "flex w-full cursor-pointer items-center justify-between rounded-sm px-2.5 py-2 text-left text-[13px] hover:bg-surface-muted " +
+                (visitWindow === o.value ? "font-semibold text-link-hover" : "text-heading")
+              }
+            >
+              {o.label}
+              {visitWindow === o.value && <i className="fas fa-check text-[11px] text-link-hover" />}
+            </button>
+          ))}
+        </FilterPill>
+
+        <label className="inline-flex cursor-pointer items-center gap-2.5 rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading">
+          <span
+            className={
+              "relative h-[18px] w-8 rounded-pill transition-colors " +
+              (waOnly ? "bg-[#25D366]" : "bg-[#cdd9e4]")
+            }
+            onClick={() => {
+              setWaOnly((v) => !v);
+              setPage(1);
+            }}
+          >
+            <span
+              className="absolute top-0.5 h-3.5 w-3.5 rounded-pill bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)] transition-[left]"
+              style={{ left: waOnly ? "16px" : "2px" }}
+            />
+          </span>
+          <i className="fab fa-whatsapp text-[#25D366]" />
+          Has WhatsApp opt-in
+        </label>
+
+        {(activeFilterCount > 0 || search.length > 0) && (
+          <button
+            type="button"
+            onClick={clearAll}
+            className="text-[13px] text-link-hover underline underline-offset-[3px]"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
-      {/* Mobile filter row */}
-      <div className="mb-3 flex items-center gap-2 overflow-x-auto md:hidden">
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 whitespace-nowrap rounded-pill border-[1.5px] border-brand bg-white px-3.5 py-1.5 text-[13px] font-medium text-link-hover"
-        >
-          <i className="fas fa-sliders-h text-[11px]" />
-          Filters
-          <span className="rounded-pill bg-brand px-1.5 py-0.5 text-[10px] font-semibold text-white">3</span>
-        </button>
-        {["Has WhatsApp", "OR · HI", "VIP"].map((t) => (
-          <span
-            key={t}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-pill bg-[#E6F1FA] px-2.5 py-1 text-[12px] text-link-hover"
+      {/* Mobile search + active chips */}
+      <div className="mb-3 flex items-center gap-2 md:hidden">
+        <div className="flex flex-1 items-center gap-2 rounded-md border border-border bg-white px-3 py-2">
+          <i className="fas fa-search text-[12px] text-[#9aa9b8]" />
+          <input
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search…"
+            className="w-full bg-transparent text-[13px] text-heading outline-none"
+          />
+        </div>
+        {(activeFilterCount > 0 || search.length > 0) && (
+          <button
+            type="button"
+            onClick={clearAll}
+            className="text-[12px] text-link-hover underline underline-offset-[3px]"
           >
-            {t}
-            <i className="fas fa-times text-[9px]" />
-          </span>
-        ))}
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Desktop table */}
@@ -284,9 +502,14 @@ export function AdminPatients() {
         <div className="flex items-center gap-3 border-b border-[#FFE7EC] bg-[#FFFAFB] px-4 py-2.5 text-[13px]">
           <i className="fas fa-info-circle text-[13px] text-cta" />
           <span>
-            <strong>0 selected</strong> · Select rows to send a WhatsApp campaign or add a tag in bulk.
+            <strong>{visible.length} of {sorted.length}</strong>
+            {sorted.length !== PATIENTS.length && (
+              <> matching · <button type="button" onClick={clearAll} className="text-link-hover underline">show all {PATIENTS.length}</button></>
+            )}
           </span>
-          <span className="ml-auto text-[12px] text-[#9aa9b8]">Showing 12 of 1,284</span>
+          <span className="ml-auto text-[12px] text-[#9aa9b8]">
+            Page {safePage} of {totalPages}
+          </span>
         </div>
 
         <table className="w-full table-fixed border-collapse">
@@ -306,69 +529,224 @@ export function AdminPatients() {
               <th className="px-3 py-3 pl-4 text-left">
                 <span className="inline-block h-[18px] w-[18px] rounded-sm border-[1.5px] border-[#cdd9e4]" />
               </th>
-              {(["Patient","Phone","Lang","Last visit","Visits","LTV","Tags",""] as const).map((h) => (
-                <th
-                  key={h}
-                  className={
-                    "px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8] " +
-                    (h === "Visits" || h === "LTV" ? "text-right" : "text-left")
-                  }
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {h}
-                    {(["Patient","Last visit","Visits","LTV"] as const).includes(h as never) && (
-                      <i className="fas fa-sort text-[9px] text-[#cdd9e4]" />
-                    )}
-                  </span>
-                </th>
-              ))}
+              <SortHeader label="Patient"   sortKey="name"      currentKey={sortBy} dir={sortDir} onClick={toggleSort} />
+              <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Phone</th>
+              <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Lang</th>
+              <SortHeader label="Last visit" sortKey="lastVisit" currentKey={sortBy} dir={sortDir} onClick={toggleSort} />
+              <SortHeader label="Visits"    sortKey="visits"    currentKey={sortBy} dir={sortDir} onClick={toggleSort} align="right" />
+              <SortHeader label="LTV"       sortKey="ltv"       currentKey={sortBy} dir={sortDir} onClick={toggleSort} align="right" />
+              <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Tags</th>
+              <th />
             </tr>
           </thead>
           <tbody>
-            <PatientRow p={PATIENTS[0]!} hover />
-            {PATIENTS.slice(1).map((p) => <PatientRow key={p.id} p={p} />)}
+            {visible.map((p) => (
+              <tr key={p.id} className="border-b border-[#F4F5F7] bg-white hover:bg-[#FAFAFB]">
+                <td className="w-8 px-3 py-3.5 pl-4">
+                  <span className="inline-block h-[18px] w-[18px] rounded-sm border-[1.5px] border-[#cdd9e4]" />
+                </td>
+                <td className="px-3 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className="grid h-9 w-9 place-items-center rounded-pill text-[13px] font-semibold"
+                      style={{ background: p.avatarBg, color: p.avatarFg }}
+                    >
+                      {p.initials}
+                    </span>
+                    <div>
+                      <div className="text-[14px] font-semibold text-heading">{p.name}</div>
+                      <div className="font-mono text-[11px] text-[#9aa9b8]">{p.id}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-[13px] text-heading">
+                  <div className="flex items-center gap-1.5">
+                    {p.phone}
+                    {p.wa && <i className="fab fa-whatsapp text-[13px] text-[#25D366]" />}
+                  </div>
+                </td>
+                <td className="px-3 py-3"><LangPill l={p.lang} /></td>
+                <td className="px-3 py-3 text-[13px] text-muted">{p.lastVisitLabel}</td>
+                <td className="px-3 py-3 text-right text-[13px] text-heading">{p.visits}</td>
+                <td className="px-3 py-3 text-right text-[13px] font-semibold text-heading">₹{p.ltv.toLocaleString("en-IN")}</td>
+                <td className="px-3 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {p.tags.length === 0 ? (
+                      <span className="text-[12px] text-[#cdd9e4]">—</span>
+                    ) : (
+                      p.tags.map((t) => <TagChip key={t} t={t} />)
+                    )}
+                  </div>
+                </td>
+                <td className="px-3 py-3 pr-4 text-right">
+                  <PatientRowMenu patientName={p.name} />
+                </td>
+              </tr>
+            ))}
+            {visible.length === 0 && (
+              <tr>
+                <td colSpan={9} className="px-4 py-12 text-center">
+                  <div className="inline-flex flex-col items-center gap-2 text-[13px] text-muted">
+                    <i className="fas fa-search text-[24px] text-[#cdd9e4]" />
+                    No patients match these filters.
+                    <button
+                      type="button"
+                      onClick={clearAll}
+                      className="text-[13px] text-link-hover underline"
+                    >
+                      Clear all filters
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
         <div className="flex items-center justify-between border-t border-border px-4 py-3.5 text-[13px] text-muted">
-          <div className="flex items-center gap-2.5">
-            <span>Rows per page:</span>
-            <select className="rounded-sm border border-border bg-white px-2 py-1 text-[13px]">
-              <option>25</option>
-              <option>50</option>
-              <option>100</option>
-            </select>
+          <div>
+            {sorted.length > 0 ? `${start + 1}–${start + visible.length}` : "0"} of{" "}
+            <strong className="text-heading">{sorted.length.toLocaleString("en-IN")}</strong>
           </div>
-          <div>1–12 of <strong className="text-heading">1,284</strong></div>
           <div className="flex gap-1.5">
-            {["fa-angle-double-left", "fa-angle-left", "fa-angle-right", "fa-angle-double-right"].map((ic, i) => (
-              <button
-                key={ic}
-                type="button"
-                disabled={i < 2}
-                aria-label={ic}
-                className={
-                  "grid h-8 w-8 place-items-center rounded-sm border border-border bg-white text-[12px] " +
-                  (i < 2 ? "cursor-not-allowed text-[#cdd9e4]" : "text-heading")
-                }
-              >
-                <i className={`fas ${ic}`} />
-              </button>
-            ))}
+            <PageBtn ic="fa-angle-double-left" onClick={() => setPage(1)} disabled={safePage === 1} />
+            <PageBtn ic="fa-angle-left" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1} />
+            <span className="grid h-8 min-w-[60px] place-items-center text-[12px]">
+              Page <strong className="mx-1 text-heading">{safePage}</strong>/{totalPages}
+            </span>
+            <PageBtn ic="fa-angle-right" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages} />
+            <PageBtn ic="fa-angle-double-right" onClick={() => setPage(totalPages)} disabled={safePage === totalPages} />
           </div>
         </div>
       </div>
 
       {/* Mobile list */}
       <div className="flex flex-col gap-2.5 md:hidden">
-        {PATIENTS.slice(0, 8).map((p) => <MobileCard key={p.id} p={p} />)}
-        <button
-          type="button"
-          className="mt-1.5 rounded-[12px] border border-border bg-white px-3.5 py-3.5 text-[13px] font-medium text-link-hover"
-        >
-          Load 1,272 more <i className="fas fa-arrow-down ml-1.5 text-[11px]" />
-        </button>
+        {visible.length === 0 ? (
+          <div className="rounded-[12px] border border-border bg-white p-8 text-center text-[13px] text-muted">
+            No patients match these filters.
+          </div>
+        ) : (
+          visible.map((p) => (
+            <div key={p.id} className="flex items-start gap-3 rounded-[12px] border border-border bg-white p-3.5">
+              <span
+                className="grid h-10 w-10 flex-none place-items-center rounded-pill text-[14px] font-semibold"
+                style={{ background: p.avatarBg, color: p.avatarFg }}
+              >
+                {p.initials}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="mb-0.5 flex items-center gap-2">
+                  <div className="text-[14px] font-semibold text-heading">{p.name}</div>
+                  {p.wa && <i className="fab fa-whatsapp text-[12px] text-[#25D366]" />}
+                  <LangPill l={p.lang} />
+                </div>
+                <div className="flex items-center gap-1.5 text-[12px] text-muted">
+                  <i className="fas fa-phone text-[10px] text-[#9aa9b8]" />
+                  {p.phone}
+                </div>
+                <div className="mt-0.5 text-[11px] text-[#9aa9b8]">
+                  Last visit · {p.lastVisitLabel} · {p.visits} visits
+                </div>
+                {p.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {p.tags.map((t) => <TagChip key={t} t={t} />)}
+                  </div>
+                )}
+              </div>
+              <PatientRowMenu patientName={p.name} />
+            </div>
+          ))
+        )}
+
+        {sorted.length > PAGE_SIZE && (
+          <div className="mt-1 flex items-center justify-between px-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={safePage === 1}
+              className="text-[13px] font-medium text-link-hover disabled:text-[#cdd9e4]"
+            >
+              ← Prev
+            </button>
+            <span className="text-[12px] text-muted">
+              {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage === totalPages}
+              className="text-[13px] font-medium text-link-hover disabled:text-[#cdd9e4]"
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  currentKey,
+  dir,
+  onClick,
+  align = "left",
+}: {
+  label: string;
+  sortKey: SortKey;
+  currentKey: SortKey;
+  dir: SortDir;
+  onClick: (k: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = currentKey === sortKey;
+  return (
+    <th
+      className={
+        "px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8] " +
+        (align === "right" ? "text-right" : "text-left")
+      }
+    >
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={
+          "inline-flex cursor-pointer items-center gap-1 transition-colors hover:text-link-hover " +
+          (active ? "text-link-hover" : "")
+        }
+      >
+        {label}
+        <i
+          className={
+            "text-[9px] " +
+            (active
+              ? dir === "asc"
+                ? "fas fa-sort-up text-link-hover"
+                : "fas fa-sort-down text-link-hover"
+              : "fas fa-sort text-[#cdd9e4]")
+          }
+        />
+      </button>
+    </th>
+  );
+}
+
+function PageBtn({ ic, onClick, disabled }: { ic: string; onClick: () => void; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ic}
+      className={
+        "grid h-8 w-8 place-items-center rounded-sm border border-border bg-white text-[12px] " +
+        (disabled ? "cursor-not-allowed text-[#cdd9e4]" : "cursor-pointer text-heading hover:border-link-hover hover:text-link-hover")
+      }
+    >
+      <i className={`fas ${ic}`} />
+    </button>
   );
 }

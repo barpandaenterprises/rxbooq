@@ -1,4 +1,26 @@
+"use client";
+
 // Admin · /admin/analytics — KPI strip, line chart, top services, language donut, microsite, no-show table
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+
+type Period = "7d" | "30d" | "90d" | "custom";
+
+const PERIOD_LABEL: Record<Period, string> = {
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  "90d": "Last 90 days",
+  "custom": "Custom range",
+};
+
+/** Period-aware KPI values, so toggling pills produces visible movement. */
+const KPIS_BY_PERIOD: Record<Period, { newPatients: string; bookings: string; noShow: string; revenue: string; deltas: { newPatients: string; bookings: string; noShow: string; revenue: string } }> = {
+  "7d":     { newPatients: "22",  bookings: "96",   noShow: "4.1%",  revenue: "₹84,000",  deltas: { newPatients: "+18%", bookings: "+9%",  noShow: "−2.1 pts", revenue: "+12%" } },
+  "30d":    { newPatients: "84",  bookings: "412",  noShow: "6.3%",  revenue: "₹3.4 L",   deltas: { newPatients: "+22%", bookings: "+14%", noShow: "−1.8 pts", revenue: "+18%" } },
+  "90d":    { newPatients: "248", bookings: "1,240", noShow: "7.0%", revenue: "₹10.2 L",  deltas: { newPatients: "+28%", bookings: "+19%", noShow: "−0.6 pts", revenue: "+22%" } },
+  "custom": { newPatients: "84",  bookings: "412",  noShow: "6.3%",  revenue: "₹3.4 L",   deltas: { newPatients: "+22%", bookings: "+14%", noShow: "−1.8 pts", revenue: "+18%" } },
+};
 
 const BOOKING_DATA = [
   { d: "Apr 10", online: 14, walkin: 6,  phone: 4 },
@@ -73,19 +95,32 @@ function KpiAnal({ label, value, delta, deltaUp, ic }: { label: string; value: s
   );
 }
 
-function LineChart() {
+function LineChart({ period }: { period: Period }) {
+  // Slice the dataset to match the selected period (we only have 30 days of demo
+  // data, so 90d/custom show everything; 7d shows the most recent points).
+  const data = useMemo(() => {
+    if (period === "7d") return BOOKING_DATA.slice(-4);
+    return BOOKING_DATA;
+  }, [period]);
+
   const W = 880, H = 280;
   const P = { l: 40, r: 20, t: 20, b: 36 };
   const innerW = W - P.l - P.r;
   const innerH = H - P.t - P.b;
   const max = 56;
-  const step = innerW / (BOOKING_DATA.length - 1);
+  const step = data.length > 1 ? innerW / (data.length - 1) : innerW;
   const yT = (v: number) => P.t + innerH - (v / max) * innerH;
   const xT = (i: number) => P.l + i * step;
   const line = (key: "online" | "walkin" | "phone") =>
-    BOOKING_DATA.map((d, i) => `${i === 0 ? "M" : "L"}${xT(i).toFixed(1)} ${yT(d[key]).toFixed(1)}`).join(" ");
-  const area = `${line("online")} L ${xT(BOOKING_DATA.length - 1)} ${P.t + innerH} L ${xT(0)} ${P.t + innerH} Z`;
+    data.map((d, i) => `${i === 0 ? "M" : "L"}${xT(i).toFixed(1)} ${yT(d[key]).toFixed(1)}`).join(" ");
+  const area = `${line("online")} L ${xT(data.length - 1)} ${P.t + innerH} L ${xT(0)} ${P.t + innerH} Z`;
   const yTicks = [0, 14, 28, 42, 56];
+
+  // Tooltip pinned to the second-to-last point (always present after a slice).
+  const tipIdx = Math.max(0, data.length - 2);
+  const tip = data[tipIdx]!;
+  const labelEvery = data.length > 8 ? 2 : 1;
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="block w-full">
       {yTicks.map((t) => (
@@ -94,8 +129,8 @@ function LineChart() {
           <text x={P.l - 8} y={yT(t) + 4} fontSize="11" fill="#9aa9b8" textAnchor="end" fontFamily="Poppins">{t}</text>
         </g>
       ))}
-      {BOOKING_DATA.map((d, i) =>
-        i % 2 === 0 ? (
+      {data.map((d, i) =>
+        i % labelEvery === 0 ? (
           <text key={i} x={xT(i)} y={H - 12} fontSize="11" fill="#9aa9b8" textAnchor="middle" fontFamily="Poppins">
             {d.d}
           </text>
@@ -105,20 +140,20 @@ function LineChart() {
       <path d={line("online")} fill="none" stroke="#0168B3" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
       <path d={line("walkin")} fill="none" stroke="#EE344E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
       <path d={line("phone")} fill="none" stroke="#0E5087" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" />
-      {/* Tooltip on May 06 */}
-      <line x1={xT(13)} x2={xT(13)} y1={P.t} y2={P.t + innerH} stroke="#cdd9e4" strokeDasharray="3 3" strokeWidth="1" />
-      <circle cx={xT(13)} cy={yT(44)} r="5" fill="#fff" stroke="#0168B3" strokeWidth="2.4" />
-      <circle cx={xT(13)} cy={yT(9)}  r="4" fill="#fff" stroke="#EE344E" strokeWidth="2.2" />
-      <circle cx={xT(13)} cy={yT(5)}  r="4" fill="#fff" stroke="#0E5087" strokeWidth="2" />
-      <g transform={`translate(${xT(13) + 12}, ${yT(44) - 58})`}>
+      {/* Tooltip */}
+      <line x1={xT(tipIdx)} x2={xT(tipIdx)} y1={P.t} y2={P.t + innerH} stroke="#cdd9e4" strokeDasharray="3 3" strokeWidth="1" />
+      <circle cx={xT(tipIdx)} cy={yT(tip.online)} r="5" fill="#fff" stroke="#0168B3" strokeWidth="2.4" />
+      <circle cx={xT(tipIdx)} cy={yT(tip.walkin)}  r="4" fill="#fff" stroke="#EE344E" strokeWidth="2.2" />
+      <circle cx={xT(tipIdx)} cy={yT(tip.phone)}  r="4" fill="#fff" stroke="#0E5087" strokeWidth="2" />
+      <g transform={`translate(${xT(tipIdx) + 12}, ${yT(tip.online) - 58})`}>
         <rect width="156" height="78" rx="8" fill="#272B41" />
-        <text x="14" y="20" fontSize="11" fill="#9aa9b8" fontFamily="Poppins">May 06, 2026</text>
+        <text x="14" y="20" fontSize="11" fill="#9aa9b8" fontFamily="Poppins">{tip.d}, 2026</text>
         <circle cx="18" cy="36" r="4" fill="#0168B3" />
-        <text x="28" y="40" fontSize="12" fill="#fff" fontFamily="Poppins">Online · 44</text>
+        <text x="28" y="40" fontSize="12" fill="#fff" fontFamily="Poppins">Online · {tip.online}</text>
         <circle cx="18" cy="54" r="4" fill="#EE344E" />
-        <text x="28" y="58" fontSize="12" fill="#fff" fontFamily="Poppins">Walk-in · 9</text>
+        <text x="28" y="58" fontSize="12" fill="#fff" fontFamily="Poppins">Walk-in · {tip.walkin}</text>
         <circle cx="18" cy="70" r="4" fill="#0E5087" />
-        <text x="28" y="74" fontSize="12" fill="#fff" fontFamily="Poppins">Phone · 5</text>
+        <text x="28" y="74" fontSize="12" fill="#fff" fontFamily="Poppins">Phone · {tip.phone}</text>
       </g>
     </svg>
   );
@@ -231,47 +266,90 @@ function MiniCard({ m }: { m: (typeof MICROSITE)[number] }) {
   );
 }
 
-function FilterBar() {
+const PERIOD_RANGE_LABEL: Record<Period, string> = {
+  "7d":     "3 May — 9 May 2026",
+  "30d":    "10 Apr — 9 May 2026",
+  "90d":    "9 Feb — 9 May 2026",
+  "custom": "Pick range…",
+};
+
+type FilterBarProps = {
+  period: Period;
+  onPeriodChange: (p: Period) => void;
+  doctor: string;
+  onDoctorChange: (d: string) => void;
+  service: string;
+  onServiceChange: (s: string) => void;
+};
+
+function FilterBar({
+  period,
+  onPeriodChange,
+  doctor,
+  onDoctorChange,
+  service,
+  onServiceChange,
+}: FilterBarProps) {
+  const PILLS: Array<{ key: Period; label: string }> = [
+    { key: "7d",     label: "7d" },
+    { key: "30d",    label: "30d" },
+    { key: "90d",    label: "90d" },
+    { key: "custom", label: "Custom" },
+  ];
+
   return (
     <div className="mb-6 flex flex-wrap items-center gap-2.5">
       <div className="inline-flex rounded-pill border border-border bg-white p-1">
-        {["7d", "30d", "90d", "Custom"].map((p) => (
-          <button
-            key={p}
-            type="button"
-            className={
-              "rounded-pill px-3.5 py-1.5 text-[13px] font-medium " +
-              (p === "30d" ? "bg-brand text-white" : "bg-transparent text-heading")
-            }
-          >
-            {p === "Custom" ? (
-              <span>
-                <i className="fas fa-calendar mr-1.5 text-[11px]" />
-                {p}
-              </span>
-            ) : (
-              p
-            )}
-          </button>
-        ))}
+        {PILLS.map((p) => {
+          const active = period === p.key;
+          return (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => onPeriodChange(p.key)}
+              className={
+                "cursor-pointer rounded-pill px-3.5 py-1.5 text-[13px] font-medium transition-colors " +
+                (active ? "bg-brand text-white" : "bg-transparent text-heading hover:bg-surface-muted")
+              }
+            >
+              {p.key === "custom" ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <i className="fas fa-calendar text-[11px]" />
+                  {p.label}
+                </span>
+              ) : (
+                p.label
+              )}
+            </button>
+          );
+        })}
       </div>
-      <span className="text-[13px] text-[#9aa9b8]">10 Apr — 9 May 2026</span>
+      <span className="text-[13px] text-[#9aa9b8]">{PERIOD_RANGE_LABEL[period]}</span>
       <div className="flex-1" />
-      <select className="rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading">
-        <option>All doctors</option>
-        <option>Dr. Manoranjan Mahakur</option>
-        <option>Dr. Lipsa Pradhan</option>
-        <option>Dr. Rashmita Sahoo</option>
+      <select
+        value={doctor}
+        onChange={(e) => onDoctorChange(e.target.value)}
+        className="cursor-pointer rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading hover:border-link-hover"
+      >
+        <option value="all">All doctors</option>
+        <option value="manoranjan">Dr. Manoranjan Mahakur</option>
+        <option value="lipsa">Dr. Lipsa Pradhan</option>
+        <option value="rashmita">Dr. Rashmita Sahoo</option>
       </select>
-      <select className="rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading">
-        <option>All services</option>
-        <option>Root Canal</option>
-        <option>Cleaning</option>
-        <option>Braces</option>
+      <select
+        value={service}
+        onChange={(e) => onServiceChange(e.target.value)}
+        className="cursor-pointer rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading hover:border-link-hover"
+      >
+        <option value="all">All services</option>
+        <option value="rct">Root Canal</option>
+        <option value="cleaning">Cleaning</option>
+        <option value="braces">Braces</option>
       </select>
       <button
         type="button"
         className="hidden items-center gap-2 rounded-md border-[1.5px] border-link-hover bg-transparent px-3.5 py-2 text-[14px] font-medium text-link-hover hover:bg-link-hover hover:text-white md:inline-flex"
+        onClick={() => alert("CSV export will be wired to a server action.")}
       >
         <i className="fas fa-download" /> Export
       </button>
@@ -326,12 +404,12 @@ function NoShowTable() {
               </td>
               <td className="px-4 py-3 text-[13px] text-muted">{p.last}</td>
               <td className="px-4 py-3 text-right">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1.5 rounded-md bg-cta px-3.5 py-1.5 text-[13px] font-medium text-cta-fg hover:bg-[#d92843]"
+                <Link
+                  href="/admin/messages"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-cta px-3.5 py-1.5 text-[13px] font-medium text-cta-fg no-underline hover:bg-[#d92843]"
                 >
                   <i className="fab fa-whatsapp text-[12px]" /> Send reminder
-                </button>
+                </Link>
               </td>
             </tr>
           ))}
@@ -342,29 +420,53 @@ function NoShowTable() {
 }
 
 export function AdminAnalytics() {
+  const [period, setPeriod] = useState<Period>("30d");
+  const [doctor, setDoctor] = useState("all");
+  const [service, setService] = useState("all");
+
+  const kpi = KPIS_BY_PERIOD[period];
+  const filtersActive = doctor !== "all" || service !== "all";
+
   return (
     <div className="px-5 pt-7 md:px-8 md:pt-8">
-      <div className="mb-4.5 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-[28px] font-semibold leading-9 text-heading md:text-[32px]">Analytics</h2>
-          <p className="mt-1 text-[14px] text-muted">How the clinic is performing this month.</p>
+          <p className="mt-1 text-[14px] text-muted">
+            {PERIOD_LABEL[period]}
+            {filtersActive && (
+              <>
+                <span className="mx-2 text-[#9aa9b8]">·</span>
+                Filtered
+                {doctor !== "all" && <> by {doctor === "manoranjan" ? "Dr. Manoranjan" : doctor === "lipsa" ? "Dr. Lipsa" : "Dr. Rashmita"}</>}
+                {service !== "all" && <> · {service === "rct" ? "Root Canal" : service === "cleaning" ? "Cleaning" : "Braces"}</>}
+              </>
+            )}
+          </p>
         </div>
       </div>
 
-      <FilterBar />
+      <FilterBar
+        period={period}
+        onPeriodChange={setPeriod}
+        doctor={doctor}
+        onDoctorChange={setDoctor}
+        service={service}
+        onServiceChange={setService}
+      />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiAnal label="New patients"  value="84"     delta="+22%"     deltaUp ic="fa-user-plus" />
-        <KpiAnal label="Bookings"      value="412"    delta="+14%"     deltaUp ic="fa-calendar-check" />
-        <KpiAnal label="No-show rate"  value="6.3%"   delta="−1.8 pts" deltaUp ic="fa-user-clock" />
-        <KpiAnal label="Total revenue" value="₹3.4 L" delta="+18%"     deltaUp ic="fa-rupee-sign" />
+        <KpiAnal label="New patients"  value={kpi.newPatients} delta={kpi.deltas.newPatients} deltaUp ic="fa-user-plus" />
+        <KpiAnal label="Bookings"      value={kpi.bookings}    delta={kpi.deltas.bookings}    deltaUp ic="fa-calendar-check" />
+        <KpiAnal label="No-show rate"  value={kpi.noShow}      delta={kpi.deltas.noShow}      deltaUp ic="fa-user-clock" />
+        <KpiAnal label="Total revenue" value={kpi.revenue}     delta={kpi.deltas.revenue}     deltaUp ic="fa-rupee-sign" />
       </div>
 
       <div className="mb-6 rounded-[12px] border border-border bg-white p-5 md:p-6">
         <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <h3 className="text-[18px] font-semibold text-heading">Bookings over time</h3>
-            <p className="mt-0.5 text-[12px] text-muted">Daily, last 30 days</p>
+            <p className="mt-0.5 text-[12px] text-muted">{PERIOD_LABEL[period]}</p>
           </div>
           <Legend
             items={[
@@ -374,7 +476,7 @@ export function AdminAnalytics() {
             ]}
           />
         </div>
-        <LineChart />
+        <LineChart period={period} />
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">

@@ -1,3 +1,8 @@
+"use client";
+
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import * as Popover from "@radix-ui/react-popover";
+import { useMemo, useState } from "react";
 import { Sparkline } from "@/components/atoms/Sparkline";
 
 type ApptStatus = "confirmed" | "booked" | "completed" | "noshow" | "cancelled";
@@ -12,6 +17,8 @@ type ApptItem = {
   isNow?: boolean;
   isNew?: boolean;
 };
+
+const ALL_DOCTORS = ["Dr. Manoranjan", "Dr. Lipsa", "Dr. Asit"] as const;
 
 const TODAYS_APPTS: { hour: string; items: ApptItem[] }[] = [
   { hour: "09:00", items: [
@@ -96,6 +103,53 @@ function KpiTile({ label, value, icon, delta, deltaColor, sparkData, sparkColor 
   );
 }
 
+function ApptRowMenu({ apptName }: { apptName: string }) {
+  const items = [
+    { ic: "fa-eye",            label: "View details" },
+    { ic: "fa-pencil-alt",     label: "Edit appointment" },
+    { ic: "fa-clock",          label: "Reschedule" },
+    { ic: "fa-check-circle",   label: "Mark completed" },
+    { ic: "fa-user-clock",     label: "Mark no-show", danger: false },
+    { ic: "fa-times-circle",   label: "Cancel", danger: true },
+  ];
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`Actions for ${apptName}`}
+          className="grid h-8 w-8 flex-none cursor-pointer place-items-center rounded-md border border-border bg-white text-muted hover:text-link-hover"
+        >
+          <i className="fas fa-ellipsis-v text-[13px]" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="end"
+          sideOffset={4}
+          className="z-50 w-[200px] rounded-md border border-border bg-white p-1.5 shadow-md"
+        >
+          {items.map((it) => (
+            <DropdownMenu.Item
+              key={it.label}
+              className={
+                "flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] outline-none hover:bg-surface-muted " +
+                (it.danger ? "text-cta" : "text-heading")
+              }
+            >
+              <i
+                className={`fas ${it.ic} w-4 text-center text-[12px]`}
+                style={{ color: it.danger ? "#EE344E" : "#575757" }}
+              />
+              {it.label}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 function TimelineRow({ a }: { a: ApptItem }) {
   return (
     <div
@@ -131,20 +185,16 @@ function TimelineRow({ a }: { a: ApptItem }) {
         </div>
       </div>
       <StatusChip status={a.status} />
-      <button
-        type="button"
-        aria-label="WhatsApp"
-        className="grid h-8 w-8 flex-none place-items-center rounded-md border border-border bg-white text-muted"
+      <a
+        href={`https://wa.me/${a.phone.replace(/\D/g, "")}`}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Open WhatsApp chat"
+        className="grid h-8 w-8 flex-none place-items-center rounded-md border border-border bg-white text-muted hover:border-[#25D366]"
       >
         <i className="fab fa-whatsapp text-[13px] text-[#25D366]" />
-      </button>
-      <button
-        type="button"
-        aria-label="More"
-        className="grid h-8 w-8 flex-none place-items-center rounded-md border border-border bg-white text-muted"
-      >
-        <i className="fas fa-ellipsis-v text-[13px]" />
-      </button>
+      </a>
+      <ApptRowMenu apptName={a.name} />
     </div>
   );
 }
@@ -184,7 +234,7 @@ function WaFeed() {
             Live · 8 events in the last hour
           </div>
         </div>
-        <a href="#" className="text-[12px] text-link-hover no-underline">View all</a>
+        <a href="/admin/messages" className="text-[12px] text-link-hover no-underline">View all</a>
       </div>
       <div className="flex-1 overflow-hidden">
         {WA_ACTIVITY.map((m, i) => (
@@ -221,7 +271,95 @@ function WaFeed() {
   );
 }
 
+function DoctorFilter({
+  selected,
+  onChange,
+}: {
+  selected: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const allSelected = selected.size === 0 || selected.size === ALL_DOCTORS.length;
+  const label = allSelected ? "All doctors" : `${selected.size} doctor${selected.size > 1 ? "s" : ""}`;
+
+  const toggle = (d: string) => {
+    const next = new Set(selected);
+    if (next.has(d)) next.delete(d);
+    else next.add(d);
+    onChange(next);
+  };
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className={
+            "inline-flex cursor-pointer items-center gap-1.5 rounded-pill border bg-white px-3 py-1.5 text-[12px] " +
+            (allSelected ? "border-border text-link-hover" : "border-link-hover bg-[#E6F1FA] font-medium text-link-hover")
+          }
+        >
+          <i className="fas fa-filter text-[10px]" /> {label}
+          <i className="fas fa-chevron-down text-[9px] text-[#9aa9b8]" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          sideOffset={4}
+          className="z-50 w-[200px] rounded-md border border-border bg-white p-1.5 shadow-md"
+        >
+          <div className="mb-1 flex items-center justify-between px-2 pt-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Doctors</span>
+            {selected.size > 0 && (
+              <button
+                type="button"
+                onClick={() => onChange(new Set())}
+                className="text-[11px] text-link-hover"
+              >
+                All
+              </button>
+            )}
+          </div>
+          {ALL_DOCTORS.map((d) => {
+            const checked = selected.size === 0 || selected.has(d);
+            return (
+              <label
+                key={d}
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2.5 py-1.5 text-[13px] hover:bg-surface-muted"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(d)}
+                  className="h-4 w-4 cursor-pointer accent-brand"
+                />
+                {d}
+              </label>
+            );
+          })}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 export function AdminToday() {
+  const [doctors, setDoctors] = useState<Set<string>>(new Set()); // empty = all
+
+  const filtered = useMemo(() => {
+    if (doctors.size === 0) return TODAYS_APPTS;
+    return TODAYS_APPTS.map((g) => ({
+      ...g,
+      items: g.items.filter((a) => doctors.has(a.doctor)),
+    })).filter((g) => g.items.length > 0);
+  }, [doctors]);
+
+  const totalCount = useMemo(
+    () => filtered.reduce((sum, g) => sum + g.items.length, 0),
+    [filtered],
+  );
+
   return (
     <div className="px-5 pt-7 md:px-8 md:pt-8">
       {/* KPI strip */}
@@ -233,41 +371,54 @@ export function AdminToday() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[2fr_1fr]">
-        {/* Timeline */}
         <div className="rounded-[12px] border border-border bg-white">
           <div className="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
             <h3 className="text-[16px] font-semibold text-heading">Today&rsquo;s schedule</h3>
-            <span className="text-[12px] text-[#9aa9b8]">· 12 appointments</span>
+            <span className="text-[12px] text-[#9aa9b8]">
+              · {totalCount} appointment{totalCount === 1 ? "" : "s"}
+              {doctors.size > 0 && doctors.size < ALL_DOCTORS.length && (
+                <> (filtered)</>
+              )}
+            </span>
             <div className="ml-auto flex gap-2">
+              <DoctorFilter selected={doctors} onChange={setDoctors} />
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-white px-3 py-1.5 text-[12px] text-link-hover"
-              >
-                <i className="fas fa-filter text-[10px]" /> All doctors
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-white px-3 py-1.5 text-[12px] text-heading"
+                onClick={() => window.print()}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-pill border border-border bg-white px-3 py-1.5 text-[12px] text-heading hover:border-link-hover"
               >
                 <i className="fas fa-print text-[10px]" /> Print
               </button>
             </div>
           </div>
           <div className="px-5 pb-5 pt-3">
-            {TODAYS_APPTS.map((group) => (
-              <div key={group.hour} className="mt-3.5 grid grid-cols-[44px_1fr] gap-3.5 md:grid-cols-[56px_1fr]">
-                <div className="pt-4 text-[12px] font-semibold tracking-[0.08em] text-[#9aa9b8]">
-                  {group.hour}
-                </div>
-                <div className="flex flex-col gap-2">
-                  {group.items.map((a) => <TimelineRow key={a.time + a.name} a={a} />)}
-                </div>
+            {filtered.length === 0 ? (
+              <div className="grid place-items-center px-4 py-16 text-center text-[13px] text-muted">
+                <i className="fas fa-filter text-[24px] text-[#cdd9e4]" />
+                <span className="mt-2">No appointments for the selected doctor{doctors.size > 1 ? "s" : ""}.</span>
+                <button
+                  type="button"
+                  onClick={() => setDoctors(new Set())}
+                  className="mt-2 text-link-hover underline"
+                >
+                  Show all doctors
+                </button>
               </div>
-            ))}
+            ) : (
+              filtered.map((group) => (
+                <div key={group.hour} className="mt-3.5 grid grid-cols-[44px_1fr] gap-3.5 md:grid-cols-[56px_1fr]">
+                  <div className="pt-4 text-[12px] font-semibold tracking-[0.08em] text-[#9aa9b8]">
+                    {group.hour}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {group.items.map((a) => <TimelineRow key={a.time + a.name} a={a} />)}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
-        {/* WhatsApp feed */}
         <WaFeed />
       </div>
     </div>

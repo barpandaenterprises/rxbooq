@@ -18,7 +18,7 @@ const NAV_ITEMS: Array<{
   badgeCoral?: boolean;
 }> = [
   { ic: "fa-calendar-day", label: "Today", href: "/admin/today", badge: "12" },
-  { ic: "fa-calendar-alt", label: "Calendar", href: "#" },
+  { ic: "fa-calendar-alt", label: "Calendar", href: "/admin/calendar" },
   { ic: "fa-users", label: "Patients", href: "/admin/patients" },
   { ic: "fa-comments", label: "Messages", href: "/admin/messages", badge: "3", badgeCoral: true },
   { ic: "fa-chart-line", label: "Analytics", href: "/admin/analytics" },
@@ -28,7 +28,7 @@ const NAV_ITEMS: Array<{
 
 const MOBILE_TABS: Array<{ ic: string; label: string; href?: string; key: AdminNavKey | "More"; badge?: number }> = [
   { ic: "fa-calendar-day", label: "Today", href: "/admin/today", key: "Today" },
-  { ic: "fa-calendar-alt", label: "Calendar", key: "Calendar" },
+  { ic: "fa-calendar-alt", label: "Calendar", href: "/admin/calendar", key: "Calendar" },
   { ic: "fa-users", label: "Patients", href: "/admin/patients", key: "Patients" },
   { ic: "fa-comments", label: "Messages", href: "/admin/messages", key: "Messages", badge: 3 },
   { ic: "fa-ellipsis-h", label: "More", key: "More" },
