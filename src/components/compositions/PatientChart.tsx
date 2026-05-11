@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { MedicalAlertsBanner } from "@/components/molecules/MedicalAlertsBanner";
 import { PrescriptionDialog } from "@/components/molecules/PrescriptionDialog";
+import { RxEntryDialog } from "@/components/molecules/RxEntryDialog";
 import { VisitTimelineRow } from "@/components/molecules/VisitTimelineRow";
 import { TEL_HREF, waLink } from "@/lib/contact";
 import {
@@ -50,6 +51,9 @@ export function PatientChart({ chart }: Props) {
   const [openRx, setOpenRx] = useState<Prescription | null>(null);
   const [fileFilter, setFileFilter] = useState<AttachmentKind | "all">("all");
 
+  // Rx added in this session via RxEntryDialog. Mock-only — wiped on refresh.
+  const [newPrescriptions, setNewPrescriptions] = useState<Prescription[]>([]);
+
   const allFiles = useMemo(() => {
     return visits
       .flatMap((v) => v.attachments.map((a) => ({ ...a, visitDate: v.appointment.date, service: v.appointment.service })))
@@ -61,10 +65,17 @@ export function PatientChart({ chart }: Props) {
   }, [allFiles, fileFilter]);
 
   const allPrescriptions = useMemo(() => {
-    return visits
-      .flatMap((v) => v.prescriptions.map((rx) => ({ ...rx, visitDate: v.appointment.date, service: v.appointment.service })))
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [visits]);
+    const existing = visits.flatMap((v) =>
+      v.prescriptions.map((rx) => ({ ...rx, visitDate: v.appointment.date, service: v.appointment.service })),
+    );
+    // Newly-added Rx aren't linked to an existing visit; surface them with a clear marker.
+    const fresh = newPrescriptions.map((rx) => ({
+      ...rx,
+      visitDate: rx.createdAt.slice(0, 10),
+      service: "Newly added",
+    }));
+    return [...fresh, ...existing].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [visits, newPrescriptions]);
 
   const lang = LANG_PILL[patient.language];
   const phoneDigits = patient.phone.replace(/\D/g, "");
@@ -164,6 +175,19 @@ export function PatientChart({ chart }: Props) {
             >
               <i className="fab fa-whatsapp text-[12px] text-[#25D366]" /> WhatsApp
             </a>
+            <RxEntryDialog
+              patientId={patient.id}
+              patientName={patient.name}
+              onSaved={(rx) => setNewPrescriptions((prev) => [rx, ...prev])}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border-[1.5px] border-cta bg-white px-3 py-2 text-[13px] font-medium text-cta hover:bg-cta hover:text-white"
+                >
+                  <i className="fas fa-prescription text-[11px]" /> Add Rx
+                </button>
+              }
+            />
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-[13px] font-medium text-heading hover:border-link-hover"
@@ -282,8 +306,32 @@ export function PatientChart({ chart }: Props) {
 
         {/* PRESCRIPTIONS */}
         <Tabs.Content value="prescriptions" className="focus:outline-none">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="text-[13px] text-muted">
+              <strong className="text-heading">{allPrescriptions.length}</strong> on file
+              {newPrescriptions.length > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1 rounded-pill bg-[#E6F4EC] px-2 py-0.5 text-[11px] font-semibold text-[#3a8b5e]">
+                  <i className="fas fa-circle text-[6px]" />
+                  {newPrescriptions.length} added today
+                </span>
+              )}
+            </div>
+            <RxEntryDialog
+              patientId={patient.id}
+              patientName={patient.name}
+              onSaved={(rx) => setNewPrescriptions((prev) => [rx, ...prev])}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-4 py-2 text-[13px] font-medium text-cta-fg hover:bg-[#d92843]"
+                >
+                  <i className="fas fa-plus text-[11px]" /> Add prescription
+                </button>
+              }
+            />
+          </div>
           {allPrescriptions.length === 0 ? (
-            <EmptyState icon="fa-prescription" label="No prescriptions yet" hint="Prescriptions issued during a visit will appear here." />
+            <EmptyState icon="fa-prescription" label="No prescriptions yet" hint="Use the Add prescription button above to capture a paper Rx or start from a template." />
           ) : (
             <div className="overflow-hidden rounded-[12px] border border-border bg-white">
               <table className="w-full border-collapse">

@@ -45,6 +45,8 @@ export type PrescriptionItem = {
   instructions?: string;
 };
 
+export type PrescriptionSource = "handwritten" | "template" | "manual";
+
 export type Prescription = {
   id: string;
   appointmentId: string | null;
@@ -54,6 +56,14 @@ export type Prescription = {
   items: PrescriptionItem[];
   notes?: string;
   createdAt: string;
+  /** How the Rx was captured. Existing demo entries leave this undefined. */
+  source?: PrescriptionSource;
+  /** Links to a VisitAttachment when source === 'handwritten'. */
+  sourcePhotoId?: string;
+  /** Which rx-template was used, for analytics + future fine-tuning. */
+  templateId?: string;
+  /** OCR confidence (0–1) when source === 'handwritten'. */
+  ocrConfidence?: number;
 };
 
 export type AttachmentKind =

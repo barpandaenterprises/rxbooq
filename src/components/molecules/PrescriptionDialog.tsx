@@ -1,7 +1,21 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { waLink } from "@/lib/contact";
 import { formatVisitDate, type Prescription } from "@/lib/patient-history-data";
+
+function buildWhatsAppBody(rx: Prescription, patientName?: string): string {
+  const greeting = patientName ? `Hi ${patientName},` : "Hi,";
+  const items = rx.items
+    .map(
+      (it, i) =>
+        `${i + 1}. ${it.medication} — ${it.dosage}, ${it.frequency}, ${it.duration}` +
+        (it.instructions ? ` (${it.instructions})` : ""),
+    )
+    .join("\n");
+  const trailer = rx.notes ? `\n\nNotes: ${rx.notes}` : "";
+  return `${greeting} here's your prescription from ${rx.doctorName}:\n\n${items}${trailer}`;
+}
 
 type Props = {
   prescription: Prescription | null;
@@ -91,13 +105,21 @@ export function PrescriptionDialog({ prescription, patientName, onClose }: Props
                 </Dialog.Close>
                 <button
                   type="button"
-                  className="ml-auto inline-flex items-center gap-2 rounded-md border-[1.5px] border-link-hover bg-white px-3.5 py-1.5 text-[13px] font-medium text-link-hover hover:bg-link-hover hover:text-white"
+                  onClick={() => window.print()}
+                  className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-md border-[1.5px] border-link-hover bg-white px-3.5 py-1.5 text-[13px] font-medium text-link-hover hover:bg-link-hover hover:text-white"
                 >
                   <i className="fas fa-print text-[11px]" /> Print
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-md bg-cta px-3.5 py-1.5 text-[13px] font-medium text-cta-fg hover:bg-[#d92843]"
+                  onClick={() => {
+                    window.open(
+                      waLink(buildWhatsAppBody(prescription, patientName)),
+                      "_blank",
+                      "noreferrer",
+                    );
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-3.5 py-1.5 text-[13px] font-medium text-cta-fg hover:bg-[#d92843]"
                 >
                   <i className="fab fa-whatsapp text-[12px]" /> Send to patient
                 </button>

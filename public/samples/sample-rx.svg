@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1100" width="800" height="1100">
+  <!-- Paper background with a faint cream tint and slight texture -->
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fefcf6"/>
+      <stop offset="1" stop-color="#f9f5e8"/>
+    </linearGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0   0 0 0 0.05 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="1100" fill="url(#paper)"/>
+  <rect width="800" height="1100" fill="#000" filter="url(#grain)" opacity="0.4"/>
+
+  <!-- Subtle paper shadow at the edges -->
+  <rect x="0" y="0" width="800" height="1100" fill="none" stroke="#dcd2b6" stroke-width="1"/>
+
+  <!-- ===== Printed letterhead ===== -->
+  <g font-family="Georgia, serif">
+    <!-- Tooth icon (simple) -->
+    <g transform="translate(60 70)">
+      <circle cx="0" cy="0" r="24" fill="#0168B3"/>
+      <text x="0" y="9" text-anchor="middle" fill="#fff" font-size="28" font-weight="bold">⚕</text>
+    </g>
+
+    <text x="100" y="64" font-size="22" font-weight="bold" fill="#0a2742">MAHAKUR MEDICAL STORE &amp; POLY DENTAL CLINIC</text>
+    <text x="100" y="86" font-size="13" fill="#575757">Bhatra Chowk, Cuttack Road, Dhanupali · Sambalpur, Odisha 768005</text>
+    <text x="100" y="104" font-size="12" fill="#575757">+91 82602 22828 · care@mahakurdental.in</text>
+
+    <line x1="60" y1="125" x2="740" y2="125" stroke="#0E5087" stroke-width="2"/>
+
+    <!-- Doctor block -->
+    <text x="60" y="156" font-size="16" font-weight="bold" fill="#272B41">Dr. Manoranjan Mahakur</text>
+    <text x="60" y="178" font-size="12" fill="#575757">MDS, MPH, PHDMC · Reg. No. 446/A</text>
+    <text x="60" y="196" font-size="12" fill="#575757">Conservative Dentistry · Cosmetology &amp; Implantology</text>
+
+    <text x="740" y="156" text-anchor="end" font-size="11" fill="#9aa9b8">Trained at BCB Dental College, Cuttack</text>
+    <text x="740" y="178" text-anchor="end" font-size="11" fill="#9aa9b8">Member, Indian Dental Association</text>
+
+    <line x1="60" y1="216" x2="740" y2="216" stroke="#dcd2b6" stroke-width="1"/>
+  </g>
+
+  <!-- ===== Printed labels + handwritten content ===== -->
+  <g font-family="Georgia, serif" fill="#272B41">
+    <text x="60" y="252" font-size="13" fill="#575757">Patient</text>
+    <text x="350" y="252" font-size="13" fill="#575757">Age</text>
+    <text x="450" y="252" font-size="13" fill="#575757">Sex</text>
+    <text x="540" y="252" font-size="13" fill="#575757">Date</text>
+  </g>
+
+  <!-- Handwritten patient details (italic + slight tilt = "handwriting") -->
+  <g font-family="'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive" fill="#1a2030">
+    <text x="120" y="250" font-size="22" transform="rotate(-1 120 250)">Anita Sahu</text>
+    <text x="380" y="250" font-size="22" transform="rotate(-1 380 250)">34</text>
+    <text x="480" y="250" font-size="22" transform="rotate(-1 480 250)">F</text>
+    <text x="580" y="250" font-size="22" transform="rotate(-1 580 250)">09/05/2026</text>
+  </g>
+
+  <!-- Underlines for the form fields -->
+  <g stroke="#cdc4a8" stroke-width="1">
+    <line x1="105" y1="258" x2="340" y2="258"/>
+    <line x1="375" y1="258" x2="440" y2="258"/>
+    <line x1="475" y1="258" x2="530" y2="258"/>
+    <line x1="575" y1="258" x2="740" y2="258"/>
+  </g>
+
+  <!-- Diagnosis / complaint line -->
+  <g font-family="Georgia, serif" fill="#575757">
+    <text x="60" y="295" font-size="13">C/O</text>
+  </g>
+  <g font-family="'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive" fill="#1a2030">
+    <text x="105" y="295" font-size="22" transform="rotate(-0.5 105 295)">Pain in lower-right molar 46. Post-RCT session 2.</text>
+  </g>
+  <line x1="100" y1="303" x2="740" y2="303" stroke="#cdc4a8" stroke-width="1"/>
+
+  <!-- ===== Rx symbol ===== -->
+  <text x="60" y="370" font-family="Georgia, serif" font-size="58" font-weight="bold" font-style="italic" fill="#0E5087">℞</text>
+
+  <!-- ===== Medication lines (handwritten) ===== -->
+  <g font-family="'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive" fill="#1a2030">
+
+    <!-- 1. Cefuroxime -->
+    <text x="80" y="430" font-size="26" transform="rotate(-0.3 80 430)">1)</text>
+    <text x="120" y="430" font-size="26" transform="rotate(-0.5 120 430)">Cefuroxime 500 mg</text>
+    <text x="140" y="462" font-size="22" transform="rotate(-0.3 140 462)">1 tab — BD × 5 days  (after meals)</text>
+
+    <!-- 2. Aceclofenac + Para -->
+    <text x="80" y="520" font-size="26" transform="rotate(-0.5 80 520)">2)</text>
+    <text x="120" y="520" font-size="26" transform="rotate(-0.3 120 520)">Aceclofenac + Paracetamol</text>
+    <text x="140" y="552" font-size="22" transform="rotate(-0.4 140 552)">1 tab — BD × 3 days</text>
+
+    <!-- 3. Chlorhexidine MW -->
+    <text x="80" y="610" font-size="26" transform="rotate(-0.4 80 610)">3)</text>
+    <text x="120" y="610" font-size="26" transform="rotate(-0.6 120 610)">Chlorhexidine 0.2% MW</text>
+    <text x="140" y="642" font-size="22" transform="rotate(-0.5 140 642)">10 ml — BD × 7 days</text>
+
+  </g>
+
+  <!-- ===== Advice ===== -->
+  <line x1="60" y1="690" x2="740" y2="690" stroke="#dcd2b6" stroke-width="1" stroke-dasharray="4 4"/>
+  <g font-family="Georgia, serif" font-size="13" fill="#575757">
+    <text x="60" y="715">Advice</text>
+  </g>
+  <g font-family="'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive" fill="#1a2030">
+    <text x="120" y="715" font-size="22" transform="rotate(-0.3 120 715)">Soft food for 24h. Avoid chewing on the right side.</text>
+    <text x="120" y="747" font-size="22" transform="rotate(-0.4 120 747)">Return in 2 weeks for obturation.</text>
+  </g>
+
+  <!-- ===== Signature ===== -->
+  <g transform="translate(540 880)">
+    <!-- Signature swoosh -->
+    <path d="M 0 30
+             C 15 -5, 35 -10, 55 10
+             C 75 30, 95 5, 115 25
+             C 130 40, 150 10, 170 30
+             M 60 38 L 160 38" stroke="#1a2030" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <line x1="0" y1="60" x2="180" y2="60" stroke="#575757" stroke-width="1"/>
+    <text x="90" y="78" text-anchor="middle" font-family="Georgia, serif" font-size="11" fill="#575757">Dr. Manoranjan Mahakur</text>
+    <text x="90" y="92" text-anchor="middle" font-family="Georgia, serif" font-size="10" fill="#9aa9b8">Reg. No. 446/A</text>
+  </g>
+
+  <!-- ===== Footer ===== -->
+  <line x1="60" y1="1010" x2="740" y2="1010" stroke="#0E5087" stroke-width="1.5"/>
+  <g font-family="Georgia, serif" font-size="10" fill="#9aa9b8">
+    <text x="400" y="1035" text-anchor="middle">Clinic hours: Mon–Fri 8 AM – 8 PM · Sat 8 AM – 6 PM · Sun closed</text>
+    <text x="400" y="1052" text-anchor="middle">For urgent queries reply on WhatsApp · +91 82602 22828</text>
+  </g>
+
+  <!-- Subtle "RX-2026-09023" id stamp -->
+  <g transform="translate(740 1080) rotate(-2)" font-family="'Courier New', monospace" font-size="9" fill="#b8253a" opacity="0.7">
+    <text text-anchor="end">Rx ID · RX-2026-09023</text>
+  </g>
+</svg>

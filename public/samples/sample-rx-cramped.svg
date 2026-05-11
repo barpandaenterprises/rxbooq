@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1100" width="800" height="1100">
+  <!-- Style 2: Cramped Rx pad — 5 meds squeezed in, margin arrows + add-on notes,
+       small writing, baseline drifts up across the page. The "experienced doctor
+       fitting too much on one page" look. -->
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fefbf2"/>
+      <stop offset="1" stop-color="#f6efe0"/>
+    </linearGradient>
+    <filter id="grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0   0 0 0 0.05 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="1100" fill="url(#paper)"/>
+  <rect width="800" height="1100" fill="#000" filter="url(#grain)" opacity="0.4"/>
+
+  <!-- A torn / curled corner suggestion (very subtle) -->
+  <path d="M 800 0 L 800 40 L 770 0 Z" fill="#e8dfc7"/>
+
+  <rect x="0" y="0" width="800" height="1100" fill="none" stroke="#d8ccab" stroke-width="1"/>
+
+  <!-- ===== Letterhead — smaller, leaving max room for meds ===== -->
+  <g font-family="Georgia, serif">
+    <g transform="translate(50 55)">
+      <circle cx="0" cy="0" r="18" fill="#0168B3"/>
+      <text x="0" y="6" text-anchor="middle" fill="#fff" font-size="20" font-weight="bold">⚕</text>
+    </g>
+    <text x="80" y="50" font-size="17" font-weight="bold" fill="#0a2742">MAHAKUR POLY DENTAL CLINIC</text>
+    <text x="80" y="68" font-size="10" fill="#575757">Bhatra Chowk, Sambalpur · +91 82602 22828</text>
+    <line x1="50" y1="85" x2="750" y2="85" stroke="#0E5087" stroke-width="1.5"/>
+    <text x="50" y="108" font-size="13" font-weight="bold" fill="#272B41">Dr. Manoranjan Mahakur · MDS, MPH</text>
+    <text x="50" y="125" font-size="10" fill="#575757">Reg. 446/A · Conservative Dentistry</text>
+  </g>
+
+  <!-- Patient line — densely packed -->
+  <g font-family="Georgia, serif" fill="#575757" font-size="10">
+    <text x="50" y="158">Pt</text>
+    <text x="330" y="158">Age/Sex</text>
+    <text x="490" y="158">Wt</text>
+    <text x="570" y="158">Dt</text>
+  </g>
+
+  <g font-family="'Brush Script MT', 'Lucida Handwriting', 'Bradley Hand', 'Comic Sans MS', cursive" fill="#1a1a2a">
+    <text x="75" y="158" font-size="22" rotate="-2 3 -1 2 -3 1 -4" transform="skewX(-7)">Anita Sahu</text>
+    <text x="390" y="158" font-size="22" rotate="-1 2 -3 1 -2" transform="skewX(-5)">34 / F</text>
+    <text x="510" y="158" font-size="22" rotate="-3 1 -2" transform="skewX(-6)">62k</text>
+    <text x="590" y="158" font-size="22" rotate="-2 1 -3 2 -1" transform="skewX(-4)">9/5/26</text>
+  </g>
+
+  <!-- C/O cramped -->
+  <g font-family="Georgia, serif" fill="#575757" font-size="10">
+    <text x="50" y="190">C/O</text>
+    <text x="50" y="210">H/O</text>
+  </g>
+  <g font-family="'Brush Script MT', 'Lucida Handwriting', 'Bradley Hand', cursive" fill="#1a1a2a">
+    <text x="80" y="190" font-size="19" rotate="-1 2 -3 1 -2 3 -1 2 -4 1 -2 3 -1 2 -3 1 -2 4 -1 2 -3 1" transform="skewX(-6)">L/R post molar pain, sensitive cold (post-RCT S2)</text>
+    <text x="80" y="210" font-size="19" rotate="-2 1 -3 2 -1 4 -2 1 -3" transform="skewX(-6)">DM-II ctrl, HTN, PCN allergy ⚠</text>
+  </g>
+
+  <line x1="50" y1="232" x2="750" y2="232" stroke="#dcd2b6" stroke-width="1"/>
+
+  <!-- ===== Rx symbol ===== -->
+  <g transform="translate(50 280)">
+    <path d="M 0 0 L 0 -40 L 18 -40 C 32 -40, 32 -22, 18 -22 L 10 -22 L 0 0 L 26 -8 L 32 0"
+          stroke="#0E5087" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- ===== 5 medications packed in — baseline drifts upward ===== -->
+  <g font-family="'Brush Script MT', 'Lucida Handwriting', 'Bradley Hand', 'Comic Sans MS', cursive" fill="#0d1f3a">
+
+    <!-- 1 -->
+    <g transform="rotate(-1.5 0 320)">
+      <text x="70" y="320" font-size="24" rotate="-2 3 -1" transform="skewX(-8)">1)</text>
+      <text x="110" y="320" font-size="26" rotate="-3 2 -1 4 -2 1 -3 2 -1 3 -4 2 -1 3 -2 1 -3" transform="skewX(-11)">T. Cefoxim 500 mg</text>
+      <text x="495" y="320" font-size="22" rotate="-1 2 -3" transform="skewX(-7)">1-0-1 × 5d</text>
+    </g>
+
+    <!-- 2 -->
+    <g transform="rotate(-1.2 0 358)">
+      <text x="70" y="358" font-size="24" rotate="-1 2 -3" transform="skewX(-7)">2)</text>
+      <text x="110" y="358" font-size="26" rotate="-2 3 -1 4 -2 1 -3 2 -1 3 -4 2 -1 -3 2 -1" transform="skewX(-10)">T. Acefac-Para</text>
+      <text x="495" y="358" font-size="22" rotate="-3 1 -2" transform="skewX(-8)">1-0-1 × 3d</text>
+      <text x="600" y="358" font-size="18" rotate="-1 2 -3 1" transform="skewX(-5)" fill="#9aa9b8">SOS</text>
+    </g>
+
+    <!-- 3 -->
+    <g transform="rotate(-0.6 0 396)">
+      <text x="70" y="396" font-size="24" rotate="-2 1" transform="skewX(-7)">3)</text>
+      <text x="110" y="396" font-size="26" rotate="-1 2 -3 4 -2 1 -3 2 -1 3 -2 1 -4 2 -1 -3" transform="skewX(-9)">MW Chlor 0.2 %</text>
+      <text x="495" y="396" font-size="22" rotate="-2 3 -1 4" transform="skewX(-8)">BD × 1/52</text>
+    </g>
+
+    <!-- 4 — added later, smaller, in margin -->
+    <g transform="rotate(0.4 0 434)">
+      <text x="70" y="434" font-size="22" rotate="-1 2" transform="skewX(-7)">4)</text>
+      <text x="105" y="434" font-size="24" rotate="-2 3 -1 4 -2 1 -3 2 -1 3 -2 1" transform="skewX(-10)">Cap. Omez 20</text>
+      <text x="490" y="434" font-size="21" rotate="-1 3" transform="skewX(-7)">1-0-0 × 5d</text>
+      <text x="600" y="434" font-size="18" rotate="-2 1" transform="skewX(-5)" fill="#9aa9b8">ac</text>
+    </g>
+
+    <!-- 5 — also squeezed in -->
+    <g transform="rotate(1.0 0 472)">
+      <text x="70" y="472" font-size="22" rotate="-1" transform="skewX(-6)">5)</text>
+      <text x="105" y="472" font-size="24" rotate="-3 2 -1 4 -2 1 -3 2 -1 3 -2 1 -4" transform="skewX(-10)">Vit-C effervescent</text>
+      <text x="490" y="472" font-size="21" rotate="-2 1 -3" transform="skewX(-7)">0-1-0 × 10d</text>
+    </g>
+
+    <!-- Margin add-on with arrow — shows reception added "Sensodyne" later -->
+    <g transform="translate(580 510) rotate(8)">
+      <text x="0" y="0" font-size="20" rotate="-2 3 -1 4 -2 1 -3 2" transform="skewX(-9)" fill="#1a1a2a">+ Sensodyne</text>
+      <text x="0" y="22" font-size="17" transform="skewX(-7)" fill="#1a1a2a">BD × 2/52</text>
+      <!-- arrow pointing back -->
+      <path d="M -10 4 Q -50 -10, -100 -25 L -90 -32 M -100 -25 L -88 -16"
+            stroke="#1a1a2a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- Squeezed advice -->
+    <g transform="rotate(-1 0 580)">
+      <text x="50" y="580" font-size="20" rotate="-2 1 -3 2 -1 4 -2 1 -3 2 -1 3 -4 2 -1 -3 2 -1 4 -2 1 -3 2 -1" transform="skewX(-8)">Soft diet 48h, no chewing R side, F/U 14 d</text>
+    </g>
+
+    <!-- Underlining a key med — doctor often does -->
+    <line x1="105" y1="362" x2="320" y2="358" stroke="#1a1a2a" stroke-width="1.2"/>
+  </g>
+
+  <!-- Ink smudge -->
+  <g opacity="0.45">
+    <ellipse cx="430" cy="395" rx="11" ry="4" fill="#1a1a2a" transform="rotate(-12 430 395)"/>
+  </g>
+
+  <!-- Signature -->
+  <g transform="translate(540 760)">
+    <path d="M 0 30
+             Q 10 0, 30 18
+             T 65 26
+             T 100 16
+             T 135 30
+             T 170 18
+             M 30 36 Q 70 50, 120 38 T 165 42" stroke="#1a1a2a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <line x1="0" y1="65" x2="180" y2="65" stroke="#575757" stroke-width="1"/>
+    <text x="90" y="82" text-anchor="middle" font-family="Georgia, serif" font-size="10" fill="#575757">Dr. Manoranjan Mahakur</text>
+  </g>
+
+  <!-- Clinic stamp, smudged -->
+  <g transform="translate(100 770) rotate(-5)" opacity="0.45">
+    <rect x="0" y="0" width="150" height="55" fill="none" stroke="#3a4ea8" stroke-width="2" rx="3"/>
+    <text x="75" y="20" text-anchor="middle" font-family="Georgia, serif" font-size="10" fill="#3a4ea8" font-weight="bold">MAHAKUR POLY DENTAL</text>
+    <text x="75" y="35" text-anchor="middle" font-family="Georgia, serif" font-size="8" fill="#3a4ea8">Reg. 446/A · Sambalpur</text>
+    <text x="75" y="48" text-anchor="middle" font-family="Georgia, serif" font-size="9" fill="#3a4ea8">09 MAY 2026</text>
+  </g>
+
+  <line x1="50" y1="1010" x2="750" y2="1010" stroke="#0E5087" stroke-width="1"/>
+  <g font-family="Georgia, serif" font-size="9" fill="#9aa9b8">
+    <text x="400" y="1030" text-anchor="middle">Bring this Rx on follow-up · WhatsApp +91 82602 22828</text>
+  </g>
+</svg>
