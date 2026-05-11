@@ -74,11 +74,21 @@ export const BOOKING_SERVICES: BookingService[] = [
   },
 ];
 
-export const BOOKING_DOCTORS: BookingDoctor[] = [
-  { id: "mm", name: "Dr. Manoranjan Mahakur", credential: "MDS, MPH, PHDMC", initials: "MM" },
-  { id: "lp", name: "Dr. Lipsa Pradhan", credential: "MDS, Dental Surgeon", initials: "LP" },
-  { id: "rs", name: "Dr. Rashmita Sahoo", credential: "BDS, Dental Surgeon", initials: "RS" },
-];
+// Derived from the canonical doctors catalog so adding a doctor there
+// automatically makes them bookable. Filtered to dentists (excludes visiting
+// physicians like Dr. Tony) and active status.
+import { DOCTORS } from "./doctors-data";
+
+export const BOOKING_DOCTORS: BookingDoctor[] = DOCTORS.filter(
+  (d) =>
+    d.status === "active" &&
+    d.primarySpecialty !== "Other", // skip visiting physicians/psychiatrists
+).map((d) => ({
+  id: d.id,
+  name: d.name,
+  credential: d.qualifications.join(", "),
+  initials: d.initials,
+}));
 
 export function findService(id: string | undefined | null): BookingService {
   return BOOKING_SERVICES.find((s) => s.id === id) ?? BOOKING_SERVICES[0]!;

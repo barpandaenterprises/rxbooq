@@ -2,6 +2,7 @@
 
 import * as Popover from "@radix-ui/react-popover";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type Lang = "EN" | "HI" | "OR";
@@ -109,14 +110,7 @@ function LangPill({ l }: { l: Lang }) {
   );
 }
 
-function PatientRowMenu({ patientName }: { patientName: string }) {
-  const items = [
-    { ic: "fa-eye",          label: "View profile" },
-    { ic: "fa-pen",          label: "Edit details" },
-    { ic: "fab fa-whatsapp", label: "Send WhatsApp", wa: true },
-    { ic: "fa-tag",          label: "Add tag" },
-    { ic: "fa-archive",      label: "Archive", danger: true },
-  ];
+function PatientRowMenu({ patientId, patientName }: { patientId: string; patientName: string }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -134,21 +128,31 @@ function PatientRowMenu({ patientName }: { patientName: string }) {
           sideOffset={4}
           className="z-50 w-[200px] rounded-md border border-border bg-white p-1.5 shadow-md"
         >
-          {items.map((it) => (
-            <DropdownMenu.Item
-              key={it.label}
-              className={
-                "flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] outline-none hover:bg-surface-muted " +
-                (it.danger ? "text-cta" : "text-heading")
-              }
+          <DropdownMenu.Item asChild>
+            <Link
+              href={`/admin/patients/${patientId}`}
+              className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading no-underline outline-none hover:bg-surface-muted"
             >
-              <i
-                className={(it.wa ? "fab " : "fas ") + it.ic + " w-4 text-center text-[12px]"}
-                style={{ color: it.wa ? "#25D366" : it.danger ? "#EE344E" : "#575757" }}
-              />
-              {it.label}
-            </DropdownMenu.Item>
-          ))}
+              <i className="fas fa-eye w-4 text-center text-[12px] text-muted" />
+              View profile
+            </Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading outline-none hover:bg-surface-muted">
+            <i className="fas fa-pen w-4 text-center text-[12px] text-muted" />
+            Edit details
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading outline-none hover:bg-surface-muted">
+            <i className="fab fa-whatsapp w-4 text-center text-[12px] text-[#25D366]" />
+            Send WhatsApp
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading outline-none hover:bg-surface-muted">
+            <i className="fas fa-tag w-4 text-center text-[12px] text-muted" />
+            Add tag
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-cta outline-none hover:bg-surface-muted">
+            <i className="fas fa-archive w-4 text-center text-[12px] text-cta" />
+            Archive
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
@@ -579,7 +583,7 @@ export function AdminPatients() {
                   </div>
                 </td>
                 <td className="px-3 py-3 pr-4 text-right">
-                  <PatientRowMenu patientName={p.name} />
+                  <PatientRowMenu patientId={p.id} patientName={p.name} />
                 </td>
               </tr>
             ))}
@@ -654,7 +658,7 @@ export function AdminPatients() {
                   </div>
                 )}
               </div>
-              <PatientRowMenu patientName={p.name} />
+              <PatientRowMenu patientId={p.id} patientName={p.name} />
             </div>
           ))
         )}

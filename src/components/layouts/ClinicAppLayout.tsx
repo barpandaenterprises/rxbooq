@@ -5,6 +5,7 @@ export type AdminNavKey =
   | "Today"
   | "Calendar"
   | "Patients"
+  | "Doctors"
   | "Messages"
   | "Analytics"
   | "Content"
@@ -20,6 +21,7 @@ const NAV_ITEMS: Array<{
   { ic: "fa-calendar-day", label: "Today", href: "/admin/today", badge: "12" },
   { ic: "fa-calendar-alt", label: "Calendar", href: "/admin/calendar" },
   { ic: "fa-users", label: "Patients", href: "/admin/patients" },
+  { ic: "fa-user-md", label: "Doctors", href: "/admin/doctors" },
   { ic: "fa-comments", label: "Messages", href: "/admin/messages", badge: "3", badgeCoral: true },
   { ic: "fa-chart-line", label: "Analytics", href: "/admin/analytics" },
   { ic: "fa-file-alt", label: "Content", href: "#" },
