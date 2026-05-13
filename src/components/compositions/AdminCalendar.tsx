@@ -2,8 +2,10 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toLocalIso } from "@/lib/booking-data";
+import type { CalendarAppt, CalendarApptStatus } from "@/lib/data/admin-calendar";
 
 const HOUR_START = 9;       // 9 AM
 const HOUR_END = 19;        // 7 PM (last visible row = 6:30 PM)
@@ -13,54 +15,8 @@ const TOTAL_SLOTS = (HOUR_END - HOUR_START) * SLOTS_PER_HOUR; // 20
 
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
-type ApptStatus = "confirmed" | "booked" | "completed" | "noshow" | "cancelled";
-
-type Appt = {
-  id: string;
-  /** 0 = Mon … 6 = Sun, relative to the start of the visible week. */
-  dayOffset: number;
-  start: string; // "HH:MM" 24h
-  end: string;
-  patient: string;
-  service: string;
-  doctor: string;
-  status: ApptStatus;
-};
-
-const DEMO_APPTS: Appt[] = [
-  // Monday
-  { id: "1", dayOffset: 0, start: "09:00", end: "09:45", patient: "Priya Sahu",     service: "Root Canal · S2",  doctor: "Dr. Manoranjan", status: "completed" },
-  { id: "2", dayOffset: 0, start: "10:00", end: "10:30", patient: "Rajesh Mishra",  service: "Consultation",     doctor: "Dr. Manoranjan", status: "completed" },
-  { id: "3", dayOffset: 0, start: "11:00", end: "11:30", patient: "Anita Sahu",     service: "Root Canal · S2",  doctor: "Dr. Manoranjan", status: "confirmed" },
-  { id: "4", dayOffset: 0, start: "14:30", end: "15:00", patient: "Manoj Behera",   service: "Implant consult",  doctor: "Dr. Manoranjan", status: "confirmed" },
-  { id: "5", dayOffset: 0, start: "16:00", end: "16:30", patient: "Suresh Pati",    service: "Cleaning",         doctor: "Dr. Lipsa",      status: "booked" },
-
-  // Tuesday
-  { id: "6",  dayOffset: 1, start: "09:00", end: "09:30", patient: "Karthik Rao",  service: "Cleaning",         doctor: "Dr. Lipsa",      status: "confirmed" },
-  { id: "7",  dayOffset: 1, start: "10:30", end: "11:30", patient: "Suresh Pati",  service: "Braces fitting",   doctor: "Dr. Lipsa",      status: "confirmed" },
-  { id: "8",  dayOffset: 1, start: "15:00", end: "15:30", patient: "Pinky Sahu",   service: "Pediatric checkup", doctor: "Dr. Lipsa",     status: "booked" },
-  { id: "9",  dayOffset: 1, start: "17:00", end: "17:30", patient: "Bidyut Panda", service: "Tooth extraction", doctor: "Dr. Manoranjan", status: "booked" },
-
-  // Wednesday
-  { id: "10", dayOffset: 2, start: "09:30", end: "10:15", patient: "Susmita Dash",   service: "Root Canal · S1", doctor: "Dr. Manoranjan", status: "confirmed" },
-  { id: "11", dayOffset: 2, start: "11:00", end: "11:30", patient: "Sarita Mahanti", service: "Whitening",       doctor: "Dr. Lipsa",      status: "noshow" },
-  { id: "12", dayOffset: 2, start: "14:00", end: "14:30", patient: "Anita Mohanti",  service: "Follow-up",       doctor: "Dr. Manoranjan", status: "booked" },
-  { id: "13", dayOffset: 2, start: "16:30", end: "17:00", patient: "Laxmi Pradhan",  service: "Cleaning",        doctor: "Dr. Lipsa",      status: "cancelled" },
-
-  // Thursday
-  { id: "14", dayOffset: 3, start: "10:00", end: "11:00", patient: "Manoj Behera", service: "Implant placement", doctor: "Dr. Manoranjan", status: "booked" },
-  { id: "15", dayOffset: 3, start: "13:00", end: "13:30", patient: "Priya Sahu",   service: "Follow-up",         doctor: "Dr. Manoranjan", status: "booked" },
-  { id: "16", dayOffset: 3, start: "15:30", end: "16:00", patient: "Karthik Rao",  service: "Crown fitting",     doctor: "Dr. Manoranjan", status: "booked" },
-
-  // Friday
-  { id: "17", dayOffset: 4, start: "09:00", end: "09:30", patient: "Rashmi Sahu",   service: "Cleaning",        doctor: "Dr. Rashmita",   status: "booked" },
-  { id: "18", dayOffset: 4, start: "11:30", end: "12:00", patient: "Bidyut Panda",  service: "Follow-up",       doctor: "Dr. Manoranjan", status: "booked" },
-  { id: "19", dayOffset: 4, start: "16:00", end: "17:00", patient: "Anita Sahu",    service: "Root Canal · S3", doctor: "Dr. Manoranjan", status: "booked" },
-
-  // Saturday
-  { id: "20", dayOffset: 5, start: "09:30", end: "10:00", patient: "Pinky Sahu",   service: "Pediatric checkup", doctor: "Dr. Lipsa", status: "booked" },
-  { id: "21", dayOffset: 5, start: "11:00", end: "11:30", patient: "Susmita Dash", service: "Cleaning",          doctor: "Dr. Lipsa", status: "booked" },
-];
+type ApptStatus = CalendarApptStatus;
+type Appt = CalendarAppt;
 
 const STATUS_STYLE: Record<ApptStatus, { bg: string; border: string; fg: string }> = {
   completed: { bg: "#E6F4EC", border: "#3a8b5e", fg: "#1f5e3a" },
@@ -93,15 +49,6 @@ function timeStringToSlot(time: string): number {
   return (h - HOUR_START) * SLOTS_PER_HOUR + (m >= 30 ? 1 : 0);
 }
 
-function getMonday(d: Date): Date {
-  const result = new Date(d);
-  const day = result.getDay();
-  const diff = day === 0 ? -6 : 1 - day; // Sunday → previous Monday
-  result.setDate(result.getDate() + diff);
-  result.setHours(0, 0, 0, 0);
-  return result;
-}
-
 function weekRangeLabel(monday: Date): string {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
@@ -110,8 +57,25 @@ function weekRangeLabel(monday: Date): string {
   return `${fmt(monday)} – ${fmt(sunday)}, ${monday.getFullYear()}`;
 }
 
-export function AdminCalendar() {
-  const [weekStart, setWeekStart] = useState<Date>(() => getMonday(new Date()));
+function isoFromDate(d: Date): string {
+  return toLocalIso(d);
+}
+
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return isoFromDate(d);
+}
+
+type Props = {
+  /** Monday of the visible week, YYYY-MM-DD. */
+  weekStartIso: string;
+  appointments: Appt[];
+};
+
+export function AdminCalendar({ weekStartIso, appointments }: Props) {
+  const router = useRouter();
+  const weekStart = useMemo(() => new Date(`${weekStartIso}T00:00:00`), [weekStartIso]);
   const [selectedAppt, setSelectedAppt] = useState<Appt | null>(null);
 
   const todayIso = toLocalIso(new Date());
@@ -131,19 +95,14 @@ export function AdminCalendar() {
     });
   }, [weekStart, todayIso]);
 
-  const apptCount = DEMO_APPTS.length;
+  const apptCount = appointments.length;
 
-  const goPrev = () => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() - 7);
-    setWeekStart(d);
+  const navigateToWeek = (iso: string) => {
+    router.push(`/admin/calendar?week=${iso}`);
   };
-  const goNext = () => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + 7);
-    setWeekStart(d);
-  };
-  const goToday = () => setWeekStart(getMonday(new Date()));
+  const goPrev   = () => navigateToWeek(addDaysIso(weekStartIso, -7));
+  const goNext   = () => navigateToWeek(addDaysIso(weekStartIso, 7));
+  const goToday  = () => router.push("/admin/calendar");
 
   return (
     <div className="px-5 pt-7 md:px-8 md:pt-8">
@@ -250,7 +209,7 @@ export function AdminCalendar() {
 
             {/* Day columns */}
             {days.map((d, dIdx) => {
-              const dayAppts = DEMO_APPTS.filter((a) => a.dayOffset === dIdx);
+              const dayAppts = appointments.filter((a) => a.dayOffset === dIdx);
               return (
                 <div
                   key={d.iso}

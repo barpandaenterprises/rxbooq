@@ -1,20 +1,17 @@
-import {
-  formatLongDate,
-  formatSlotLabel,
-  type BookingDoctor,
-  type BookingService,
-} from "@/lib/booking-data";
+import { formatLongDate, formatSlotLabel } from "@/lib/booking-data";
+
+type CardService = { id: string; name: string; durationMinutes: number; feeLabel: string };
+type CardDoctor  = { id: string; name: string; credential: string };
 
 type Props = {
-  service: BookingService;
-  doctor: BookingDoctor | null;
-  date: string;
-  slot: string;
+  service: CardService;
+  doctor:  CardDoctor | null;
+  date:    string;
+  slot:    string;
   compact?: boolean;
+  clinicName?:    string;
+  clinicAddress?: string;
 };
-
-const CLINIC_NAME = "Mahakur Medical Store & Poly Dental Clinic";
-const CLINIC_ADDRESS = "Bhatra Chowk, Cuttack Road, Dhanupali, Sambalpur, Odisha 768005";
 
 export function AppointmentConfirmedCard({
   service,
@@ -22,9 +19,13 @@ export function AppointmentConfirmedCard({
   date,
   slot,
   compact,
+  clinicName    = "Doctor Kart Clinic",
+  clinicAddress = "",
 }: Props) {
+  const CLINIC_NAME    = clinicName;
+  const CLINIC_ADDRESS = clinicAddress;
   const rows: Array<[string, string, string, string]> = [
-    ["fa-tooth", "Service", service.name, `${service.duration} · ${service.fee}`],
+    ["fa-tooth", "Service", service.name, `${service.durationMinutes} min · ${service.feeLabel}`],
     [
       "fa-user-md",
       "Doctor",

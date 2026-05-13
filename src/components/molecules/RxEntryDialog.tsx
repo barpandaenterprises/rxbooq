@@ -1,7 +1,11 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useRef, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import { z } from "zod";
 import { BOOKING_DOCTORS, type BookingDoctor } from "@/lib/booking-data";
 import { waLink } from "@/lib/contact";
 import {
@@ -11,6 +15,35 @@ import {
 } from "@/lib/patient-history-data";
 import { recognisePrescription } from "@/lib/rx-ocr";
 import { RX_TEMPLATES, getTemplate } from "@/lib/rx-templates";
+import { createPrescriptionAction } from "@/app/(clinic-app)/admin/prescriptions/actions";
+
+// ---------- Form schema ----------------------------------------------------
+
+const rxItemSchema = z.object({
+  medication:   z.string(),
+  dosage:       z.string(),
+  frequency:    z.string(),
+  duration:     z.string(),
+  instructions: z.string(),
+});
+
+const rxFormSchema = z.object({
+  items:      z.array(rxItemSchema).min(1),
+  notes:      z.string(),
+  doctorId:   z.string().min(1, "Pick a doctor"),
+  source:     z.enum(["handwritten", "template", "manual"]),
+  templateId: z.string(),
+});
+
+type RxFormValues = z.infer<typeof rxFormSchema>;
+
+const EMPTY_FORM_ITEM = {
+  medication:   "",
+  dosage:       "",
+  frequency:    "",
+  duration:     "",
+  instructions: "",
+};
 
 type Step = "path" | "camera" | "capture" | "template" | "review" | "saved";
 
@@ -55,15 +88,41 @@ export function RxEntryDialog({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // Shared form state
-  const [items, setItems] = useState<PrescriptionItem[]>([{ ...EMPTY_ITEM }]);
-  const [notes, setNotes] = useState("");
-  const [doctorId, setDoctorId] = useState(defaultDoctorId);
-  const [source, setSource] = useState<PrescriptionSource>("manual");
-  const [templateId, setTemplateId] = useState<string | undefined>(undefined);
+  // Shared form state — RHF
+  const form = useForm<RxFormValues>({
+    resolver: zodResolver(rxFormSchema),
+    defaultValues: {
+      items:      [{ ...EMPTY_FORM_ITEM }],
+      notes:      "",
+      doctorId:   defaultDoctorId,
+      source:     "manual",
+      templateId: "",
+    },
+    mode: "onSubmit",
+  });
+  const {
+    register,
+    watch,
+    setValue,
+    handleSubmit,
+    reset: resetForm,
+  } = form;
+  const { fields, append, remove, replace, update } = useFieldArray({
+    control: form.control,
+    name:    "items",
+  });
+
+  const items      = watch("items");
+  const notes      = watch("notes");
+  const doctorId   = watch("doctorId");
+  const source     = watch("source");
+  const templateId = watch("templateId");
 
   // Result of save
   const [savedRx, setSavedRx] = useState<Prescription | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const doctor: BookingDoctor =
     BOOKING_DOCTORS.find((d) => d.id === doctorId) ?? BOOKING_DOCTORS[0]!;
@@ -72,24 +131,27 @@ export function RxEntryDialog({
 
   const reset = () => {
     setStep("path");
-    setItems([{ ...EMPTY_ITEM }]);
-    setNotes("");
-    setSource("manual");
-    setTemplateId(undefined);
+    resetForm({
+      items:      [{ ...EMPTY_FORM_ITEM }],
+      notes:      "",
+      doctorId:   defaultDoctorId,
+      source:     "manual",
+      templateId: "",
+    });
     setOcrWarnings([]);
     setOcrConfidence(undefined);
     if (photoUrl) URL.revokeObjectURL(photoUrl);
     setPhotoFile(null);
     setPhotoUrl(null);
     setOcrLoading(false);
-    setDoctorId(defaultDoctorId);
     setSavedRx(null);
+    setSubmitError(null);
   };
 
   // ---------- Step transitions ----------
 
   const pickPhoto = (kind: "camera" | "gallery") => {
-    setSource("handwritten");
+    setValue("source", "handwritten");
     if (kind === "camera") {
       // Live camera step — uses navigator.mediaDevices.getUserMedia so the
       // user actually sees a video preview inside the dialog on desktop too.
@@ -131,13 +193,21 @@ export function RxEntryDialog({
     setPhotoUrl(null);
   };
 
+  const toFormItem = (it: PrescriptionItem) => ({
+    medication:   it.medication,
+    dosage:       it.dosage,
+    frequency:    it.frequency,
+    duration:     it.duration,
+    instructions: it.instructions ?? "",
+  });
+
   const runOcr = async () => {
     if (!photoFile) return;
     setOcrLoading(true);
     try {
       const draft = await recognisePrescription(photoFile);
-      setItems(draft.items.length > 0 ? draft.items : [{ ...EMPTY_ITEM }]);
-      setNotes(draft.notes ?? "");
+      replace(draft.items.length > 0 ? draft.items.map(toFormItem) : [{ ...EMPTY_FORM_ITEM }]);
+      setValue("notes", draft.notes ?? "");
       setOcrWarnings(draft.warnings ?? []);
       setOcrConfidence(draft.confidence);
       setStep("review");
@@ -149,62 +219,119 @@ export function RxEntryDialog({
   const pickTemplate = (id: string) => {
     const tpl = getTemplate(id);
     if (!tpl) return;
-    setSource("template");
-    setTemplateId(id);
-    setItems(tpl.items.length > 0 ? tpl.items.map((i) => ({ ...i })) : [{ ...EMPTY_ITEM }]);
-    setNotes(tpl.notes ?? "");
+    setValue("source", "template");
+    setValue("templateId", id);
+    replace(tpl.items.length > 0 ? tpl.items.map(toFormItem) : [{ ...EMPTY_FORM_ITEM }]);
+    setValue("notes", tpl.notes ?? "");
     setStep("review");
   };
 
   const pickManual = () => {
-    setSource("manual");
-    setItems([{ ...EMPTY_ITEM }]);
-    setNotes("");
+    setValue("source", "manual");
+    replace([{ ...EMPTY_FORM_ITEM }]);
+    setValue("notes", "");
     setStep("review");
   };
 
   // ---------- Item editing ----------
 
   const updateItem = (idx: number, field: keyof PrescriptionItem, value: string) => {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+    const current = items[idx];
+    if (!current) return;
+    update(idx, { ...current, [field]: value });
   };
 
-  const addItem = () => setItems((prev) => [...prev, { ...EMPTY_ITEM }]);
+  const addItem = () => append({ ...EMPTY_FORM_ITEM });
 
-  const removeItem = (idx: number) =>
-    setItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev));
+  const removeItem = (idx: number) => {
+    if (items.length > 1) remove(idx);
+  };
 
   // ---------- Save ----------
 
-  const handleSave = () => {
-    if (!canSave) return;
-    const trimmed = items
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(reader.error ?? new Error("Read failed"));
+      reader.readAsDataURL(file);
+    });
+
+  const onSubmit = (values: RxFormValues) => {
+    if (isPending) return;
+    // canSave is a stricter rule than the schema (requires at least one
+    // medication with a non-empty name). Block here too.
+    const hasMedication = values.items.some((it) => it.medication.trim().length > 0);
+    if (!hasMedication) {
+      setSubmitError("Add at least one medication.");
+      return;
+    }
+    setSubmitError(null);
+
+    const trimmed = values.items
       .map((it) => ({
-        medication: it.medication.trim(),
-        dosage: it.dosage.trim(),
-        frequency: it.frequency.trim(),
-        duration: it.duration.trim(),
-        instructions: it.instructions?.trim() || undefined,
+        medication:   it.medication.trim(),
+        dosage:       it.dosage.trim(),
+        frequency:    it.frequency.trim(),
+        duration:     it.duration.trim(),
+        instructions: it.instructions.trim() || undefined,
       }))
       .filter((it) => it.medication.length > 0);
 
-    const rx: Prescription = {
-      id: newId("Rx"),
-      appointmentId: null,
-      patientId,
-      doctorId: doctor.id,
-      doctorName: doctor.name,
-      items: trimmed,
-      notes: notes.trim() || undefined,
-      createdAt: new Date().toISOString(),
-      source,
-      templateId,
-      ocrConfidence: source === "handwritten" ? ocrConfidence : undefined,
-      sourcePhotoId: source === "handwritten" && photoFile ? newId("F") : undefined,
-    };
-    setSavedRx(rx);
-    onSaved(rx);
-    setStep("saved");
+    startTransition(async () => {
+      let photoBase64:   string | undefined;
+      let photoMime:     string | undefined;
+      let photoFileName: string | undefined;
+      if (values.source === "handwritten" && photoFile) {
+        try {
+          photoBase64   = await fileToBase64(photoFile);
+          photoMime     = photoFile.type || "image/jpeg";
+          photoFileName = photoFile.name || `rx-${Date.now()}.jpg`;
+        } catch {
+          setSubmitError("Couldn't read the photo file. Try again or skip the photo.");
+          return;
+        }
+      }
+
+      const result = await createPrescriptionAction({
+        patientId,
+        doctorId:     values.doctorId,
+        items:        trimmed,
+        notes:        values.notes.trim() || undefined,
+        source:       values.source,
+        templateId:   values.templateId || undefined,
+        ocrConfidence: values.source === "handwritten" ? ocrConfidence : undefined,
+        photoBase64,
+        photoMime,
+        photoFileName,
+      });
+
+      if (!result.ok) {
+        setSubmitError(result.error);
+        return;
+      }
+
+      const localRx: Prescription = {
+        id:             result.mock ? newId("Rx") : result.prescriptionId,
+        appointmentId:  null,
+        patientId,
+        doctorId:       values.doctorId,
+        doctorName:     doctor.name,
+        items:          trimmed,
+        notes:          values.notes.trim() || undefined,
+        createdAt:      new Date().toISOString(),
+        source:         values.source,
+        templateId:     values.templateId || undefined,
+        ocrConfidence:  values.source === "handwritten" ? ocrConfidence : undefined,
+        sourcePhotoId:  values.source === "handwritten" && photoFile ? newId("F") : undefined,
+      };
+      setSavedRx(localRx);
+      onSaved(localRx);
+      setStep("saved");
+
+      // Live mode: revalidate the chart so the new Rx appears on next nav.
+      if (!result.mock) router.refresh();
+    });
   };
 
   const sendWa = () => {
@@ -297,8 +424,8 @@ export function RxEntryDialog({
                 onBack={() => { retakePhoto(); setStep("path"); }}
                 onSkipOcr={() => {
                   // Use the photo but skip OCR — go to manual review with empty form + photo attached.
-                  setItems([{ ...EMPTY_ITEM }]);
-                  setNotes("");
+                  replace([{ ...EMPTY_FORM_ITEM }]);
+                  setValue("notes", "");
                   setStep("review");
                 }}
               />
@@ -318,8 +445,8 @@ export function RxEntryDialog({
                 onUpdateItem={updateItem}
                 onAddItem={addItem}
                 onRemoveItem={removeItem}
-                onChangeNotes={setNotes}
-                onChangeDoctor={setDoctorId}
+                onChangeNotes={(v) => setValue("notes", v)}
+                onChangeDoctor={(v) => setValue("doctorId", v)}
               />
             )}
             {step === "saved" && savedRx && (
@@ -353,7 +480,13 @@ export function RxEntryDialog({
               </Dialog.Close>
               {step === "review" && (
                 <div className="ml-auto flex items-center gap-3">
-                  {!canSave && (
+                  {submitError && (
+                    <span role="alert" className="text-[12px] text-danger">
+                      <i className="fas fa-exclamation-triangle mr-1" />
+                      {submitError}
+                    </span>
+                  )}
+                  {!canSave && !submitError && (
                     <span className="hidden text-[12px] text-[#9aa9b8] sm:inline">
                       <i className="fas fa-info-circle mr-1" />
                       Add at least one medication to save
@@ -361,15 +494,24 @@ export function RxEntryDialog({
                   )}
                   <button
                     type="button"
-                    onClick={handleSave}
-                    disabled={!canSave}
+                    onClick={handleSubmit(onSubmit)}
+                    disabled={!canSave || isPending}
                     className={
                       "inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-5 py-2 text-[14px] font-semibold text-cta-fg transition-colors hover:bg-[#d92843] " +
-                      (!canSave ? "cursor-not-allowed opacity-50 hover:bg-cta" : "")
+                      (!canSave || isPending ? "cursor-not-allowed opacity-50 hover:bg-cta" : "")
                     }
                   >
-                    <i className="fas fa-save text-[12px]" />
-                    Save prescription
+                    {isPending ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin text-[12px]" />
+                        Saving…
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-save text-[12px]" />
+                        Save prescription
+                      </>
+                    )}
                   </button>
                 </div>
               )}

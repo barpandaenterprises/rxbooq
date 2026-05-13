@@ -1,7 +1,12 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
+import { addDoctorAction, type AddDoctorScheduleRow } from "@/app/(clinic-app)/admin/doctors/actions";
 import {
   SPECIALTIES,
   WEEKDAYS,
@@ -10,6 +15,7 @@ import {
   type DoctorStatus,
   type Locale,
   type Specialty,
+  type Weekday,
   type WeeklySchedule,
 } from "@/lib/doctors-data";
 
@@ -27,6 +33,84 @@ const AVATAR_PALETTE = [
   { bg: "#FFF8EC", fg: "#7a5c2b" },
   { bg: "#F4E5FA", fg: "#6b3aa1" },
 ];
+
+// Postgres weekday: 0=Sun, 1=Mon, ... 6=Sat. Our enum starts at Monday.
+const WEEKDAY_TO_PG: Record<Weekday, number> = {
+  mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0,
+};
+
+// =============================================================================
+// Schema
+// =============================================================================
+
+const TIME = z.string().regex(/^\d{2}:\d{2}$/, "Use HH:mm");
+
+const scheduleSchema = z
+  .record(
+    z.enum(WEEKDAYS as unknown as [Weekday, ...Weekday[]]),
+    z.array(z.object({ start: TIME, end: TIME })),
+  )
+  .refine(
+    (s) => Object.values(s).every((ranges) => (ranges ?? []).every((r) => r.end > r.start)),
+    "End time must be after start time",
+  );
+
+const doctorFormSchema = z.object({
+  name:               z.string().trim().min(2, "Name must be at least 2 characters"),
+  qualifications:     z.string().trim().min(1, "Add at least one qualification"),
+  registrationNumber: z.string().trim().min(1, "Registration number is required"),
+  yearsExperience:    z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || (/^\d+$/.test(v) && Number(v) >= 0 && Number(v) <= 80),
+      "Enter a whole number between 0 and 80",
+    ),
+  primarySpecialty:   z.enum(SPECIALTIES as unknown as [Specialty, ...Specialty[]]),
+  trainedAt:          z.string().trim().optional().default(""),
+  phone:              z.string().refine(
+    (v) => /^\d{10}$/.test(v.replace(/\D/g, "")),
+    "Enter a 10-digit phone number",
+  ),
+  email:              z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+      "Enter a valid email address",
+    ),
+  languages:          z.array(z.enum(["EN", "HI", "OR"])).min(1, "Pick at least one language"),
+  visiting:           z.boolean(),
+  visitingNote:       z.string().optional().default(""),
+  status:             z.enum(["active", "on_leave", "inactive"]),
+  schedule:           scheduleSchema,
+});
+
+type DoctorFormValues = z.infer<typeof doctorFormSchema>;
+
+const DEFAULT_VALUES: DoctorFormValues = {
+  name:               "",
+  qualifications:     "",
+  registrationNumber: "",
+  yearsExperience:    "",
+  primarySpecialty:   "General Dentistry",
+  trainedAt:          "",
+  phone:              "",
+  email:              "",
+  languages:          ["EN"],
+  visiting:           false,
+  visitingNote:       "",
+  status:             "active",
+  schedule: {
+    mon: [DEFAULT_RANGE], tue: [DEFAULT_RANGE], wed: [DEFAULT_RANGE],
+    thu: [DEFAULT_RANGE], fri: [DEFAULT_RANGE], sat: [DEFAULT_RANGE],
+  },
+};
+
+// =============================================================================
+// Helpers
+// =============================================================================
 
 function generateInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter((p) => !p.match(/^dr\.?$/i));
@@ -49,117 +133,116 @@ function generateId(name: string, existing: string[]): string {
   return id;
 }
 
+// =============================================================================
+// Component
+// =============================================================================
+
 export function AddDoctorDialog({ trigger, onAdded }: Props) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [qualifications, setQualifications] = useState("");
-  const [registrationNumber, setRegistrationNumber] = useState("");
-  const [primarySpecialty, setPrimarySpecialty] = useState<Specialty>("General Dentistry");
-  const [trainedAt, setTrainedAt] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [languages, setLanguages] = useState<Set<Locale>>(new Set(["EN"]));
-  const [visiting, setVisiting] = useState(false);
-  const [visitingNote, setVisitingNote] = useState("");
-  const [status, setStatus] = useState<DoctorStatus>("active");
-  const [schedule, setSchedule] = useState<WeeklySchedule>({
-    mon: [DEFAULT_RANGE], tue: [DEFAULT_RANGE], wed: [DEFAULT_RANGE],
-    thu: [DEFAULT_RANGE], fri: [DEFAULT_RANGE], sat: [DEFAULT_RANGE],
+
+  const form = useForm<DoctorFormValues>({
+    resolver:      zodResolver(doctorFormSchema),
+    defaultValues: DEFAULT_VALUES,
+    mode:          "onBlur",
   });
 
-  const cleanedName = name.trim();
-  const phoneDigits = phone.replace(/\D/g, "");
-  const canSubmit =
-    cleanedName.length >= 2 &&
-    qualifications.trim().length > 0 &&
-    registrationNumber.trim().length > 0 &&
-    phoneDigits.length === 10 &&
-    languages.size > 0;
+  const {
+    register,
+    control,
+    handleSubmit,
+    watch,
+    reset,
+    formState: { errors, isValid },
+  } = form;
 
-  const toggleLang = (l: Locale) => {
-    setLanguages((prev) => {
-      const next = new Set(prev);
-      if (next.has(l)) next.delete(l);
-      else next.add(l);
-      return next;
+  const visiting = watch("visiting");
+
+  const onSubmit = (values: DoctorFormValues) => {
+    if (isPending) return;
+    setSubmitError(null);
+
+    const displayName    = values.name.startsWith("Dr") ? values.name : `Dr. ${values.name}`;
+    const qualsArr       = values.qualifications.split(",").map((q) => q.trim()).filter(Boolean);
+    const phoneDigits    = values.phone.replace(/\D/g, "");
+    const yearsExp       = values.yearsExperience ? Number.parseInt(values.yearsExperience, 10) : null;
+    const scheduleRows: AddDoctorScheduleRow[] = (Object.keys(values.schedule) as Weekday[]).flatMap(
+      (day) => (values.schedule[day] ?? []).map((range) => ({
+        weekday:    WEEKDAY_TO_PG[day],
+        start_time: range.start,
+        end_time:   range.end,
+      })),
+    );
+
+    startTransition(async () => {
+      const result = await addDoctorAction({
+        displayName,
+        qualifications:     qualsArr,
+        registrationNumber: values.registrationNumber,
+        yearsExperience:    yearsExp,
+        trainedAt:          values.trainedAt || null,
+        phone:              phoneDigits ? `+91${phoneDigits}` : null,
+        email:              values.email || null,
+        primarySpecialty:   values.primarySpecialty,
+        visiting:           values.visiting,
+        visitingNote:       values.visiting ? (values.visitingNote || null) : null,
+        status:             values.status,
+        languages:          values.languages.map((l) => l.toLowerCase()),
+        schedule:           scheduleRows,
+      });
+
+      if (!result.ok) {
+        setSubmitError(result.error);
+        return;
+      }
+
+      if (result.mock) {
+        const palette = AVATAR_PALETTE[Math.floor(Math.random() * AVATAR_PALETTE.length)]!;
+        const newDoctor: Doctor = {
+          id:                 generateId(values.name, []),
+          name:               displayName,
+          initials:           generateInitials(values.name),
+          avatarBg:           palette.bg,
+          avatarFg:           palette.fg,
+          qualifications:     qualsArr,
+          registrationNumber: values.registrationNumber,
+          primarySpecialty:   values.primarySpecialty,
+          subSpecialties:     [],
+          trainedAt:          values.trainedAt || "—",
+          bio:                "",
+          languages:          values.languages,
+          phone:              `+91 ${phoneDigits}`,
+          email:              values.email || undefined,
+          whatsappOptIn:      true,
+          status:             values.status,
+          visiting:           values.visiting,
+          visitingNote:       values.visiting ? (values.visitingNote || undefined) : undefined,
+          joinedOn:           new Date().toISOString().slice(0, 10),
+          schedule:           values.schedule,
+          services:           ["gen"],
+          stats: {
+            yearsExperience: yearsExp ?? 0, patientsServed: 0, appointmentsCompleted: 0,
+            avgRating: 0, reviewCount: 0,
+          },
+          reviews: [],
+        };
+        onAdded(newDoctor);
+      } else {
+        router.refresh();
+      }
+
+      setOpen(false);
+      window.setTimeout(() => { reset(DEFAULT_VALUES); setSubmitError(null); }, 200);
     });
-  };
-
-  const toggleDay = (d: keyof WeeklySchedule) => {
-    setSchedule((prev) => {
-      const next = { ...prev };
-      if (next[d]) delete next[d];
-      else next[d] = [DEFAULT_RANGE];
-      return next;
-    });
-  };
-
-  const updateRange = (d: keyof WeeklySchedule, field: "start" | "end", value: string) => {
-    setSchedule((prev) => ({
-      ...prev,
-      [d]: [{ ...(prev[d]?.[0] ?? DEFAULT_RANGE), [field]: value }],
-    }));
-  };
-
-  const reset = () => {
-    setName("");
-    setQualifications("");
-    setRegistrationNumber("");
-    setPrimarySpecialty("General Dentistry");
-    setTrainedAt("");
-    setPhone("");
-    setEmail("");
-    setLanguages(new Set(["EN"]));
-    setVisiting(false);
-    setVisitingNote("");
-    setStatus("active");
-    setSchedule({
-      mon: [DEFAULT_RANGE], tue: [DEFAULT_RANGE], wed: [DEFAULT_RANGE],
-      thu: [DEFAULT_RANGE], fri: [DEFAULT_RANGE], sat: [DEFAULT_RANGE],
-    });
-  };
-
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    const palette = AVATAR_PALETTE[Math.floor(Math.random() * AVATAR_PALETTE.length)]!;
-    const newDoctor: Doctor = {
-      id: generateId(cleanedName, []),
-      name: cleanedName.startsWith("Dr") ? cleanedName : `Dr. ${cleanedName}`,
-      initials: generateInitials(cleanedName),
-      avatarBg: palette.bg,
-      avatarFg: palette.fg,
-      qualifications: qualifications.split(",").map((q) => q.trim()).filter(Boolean),
-      registrationNumber: registrationNumber.trim(),
-      primarySpecialty,
-      subSpecialties: [],
-      trainedAt: trainedAt.trim() || "—",
-      bio: "",
-      languages: Array.from(languages),
-      phone: `+91 ${phoneDigits}`,
-      email: email.trim() || undefined,
-      whatsappOptIn: true,
-      status,
-      visiting,
-      visitingNote: visiting ? visitingNote.trim() || undefined : undefined,
-      joinedOn: new Date().toISOString().slice(0, 10),
-      schedule,
-      services: ["gen"],
-      stats: {
-        yearsExperience: 0,
-        patientsServed: 0,
-        appointmentsCompleted: 0,
-        avgRating: 0,
-        reviewCount: 0,
-      },
-      reviews: [],
-    };
-    onAdded(newDoctor);
-    setOpen(false);
-    window.setTimeout(reset, 200);
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={(v) => { setOpen(v); if (!v) window.setTimeout(reset, 200); }}>
+    <Dialog.Root open={open} onOpenChange={(v) => {
+      setOpen(v);
+      if (!v) window.setTimeout(() => { reset(DEFAULT_VALUES); setSubmitError(null); }, 200);
+    }}>
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-[rgba(16,24,40,0.55)]" />
@@ -179,241 +262,324 @@ export function AddDoctorDialog({ trigger, onAdded }: Props) {
             </Dialog.Close>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 md:px-6">
-            <Section label="Basics" required>
-              <Field label="Full name" required>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Manoranjan Mahakur"
-                  autoFocus
-                  className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
-                />
-                <p className="mt-1 text-[11px] text-[#9aa9b8]">We'll add the &ldquo;Dr.&rdquo; prefix automatically if missing.</p>
-              </Field>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Qualifications" required>
+          <form
+            onSubmit={handleSubmit(onSubmit)}
+            className="flex min-h-0 flex-1 flex-col"
+            noValidate
+          >
+            <div className="flex-1 overflow-y-auto px-5 py-4 md:px-6">
+              <Section label="Basics" required>
+                <Field label="Full name" required error={errors.name?.message}>
                   <input
-                    value={qualifications}
-                    onChange={(e) => setQualifications(e.target.value)}
-                    placeholder="MDS, MPH"
-                    className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
+                    {...register("name")}
+                    placeholder="Manoranjan Mahakur"
+                    autoFocus
+                    className={inputCls(!!errors.name)}
                   />
-                  <p className="mt-1 text-[11px] text-[#9aa9b8]">Comma-separated</p>
+                  <p className="mt-1 text-[11px] text-[#9aa9b8]">We&rsquo;ll add the &ldquo;Dr.&rdquo; prefix automatically if missing.</p>
                 </Field>
-                <Field label="Registration No." required>
-                  <input
-                    value={registrationNumber}
-                    onChange={(e) => setRegistrationNumber(e.target.value)}
-                    placeholder="446/A"
-                    className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
-                  />
-                </Field>
-              </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Primary specialty">
-                  <select
-                    value={primarySpecialty}
-                    onChange={(e) => setPrimarySpecialty(e.target.value as Specialty)}
-                    className="w-full cursor-pointer rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
-                  >
-                    {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </Field>
-                <Field label="Trained at">
-                  <input
-                    value={trainedAt}
-                    onChange={(e) => setTrainedAt(e.target.value)}
-                    placeholder="BCB Dental College, Cuttack"
-                    className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
-                  />
-                </Field>
-              </div>
-            </Section>
-
-            <Section label="Contact">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Phone" required>
-                  <div className="flex gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3 text-[14px] text-heading">🇮🇳 +91</span>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Qualifications" required error={errors.qualifications?.message}>
                     <input
-                      type="tel"
-                      inputMode="numeric"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="98765 43210"
-                      className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
+                      {...register("qualifications")}
+                      placeholder="MDS, MPH"
+                      className={inputCls(!!errors.qualifications)}
                     />
-                  </div>
-                </Field>
-                <Field label="Email">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="dr.name@clinic.in"
-                    className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
-                  />
-                </Field>
-              </div>
-
-              <Field label="Languages" required>
-                <div className="flex flex-wrap gap-1.5">
-                  {(["EN", "HI", "OR"] as Locale[]).map((l) => {
-                    const active = languages.has(l);
-                    return (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => toggleLang(l)}
-                        className={
-                          "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors " +
-                          (active
-                            ? "bg-brand text-white"
-                            : "border border-border bg-white text-heading hover:border-link-hover")
-                        }
-                      >
-                        {l === "EN" ? "English" : l === "HI" ? "हिंदी" : "ଓଡ଼ିଆ"}
-                      </button>
-                    );
-                  })}
+                    <p className="mt-1 text-[11px] text-[#9aa9b8]">Comma-separated</p>
+                  </Field>
+                  <Field label="Registration No." required error={errors.registrationNumber?.message}>
+                    <input
+                      {...register("registrationNumber")}
+                      placeholder="446/A"
+                      className={inputCls(!!errors.registrationNumber)}
+                    />
+                  </Field>
                 </div>
-              </Field>
-            </Section>
 
-            <Section label="Role">
-              <Field label="Type">
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setVisiting(false)}
-                    className={
-                      "rounded-pill px-3 py-1.5 text-[12px] font-medium " +
-                      (!visiting ? "bg-brand text-white" : "border border-border bg-white text-heading")
-                    }
-                  >
-                    Everyday team
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVisiting(true)}
-                    className={
-                      "rounded-pill px-3 py-1.5 text-[12px] font-medium " +
-                      (visiting ? "bg-brand text-white" : "border border-border bg-white text-heading")
-                    }
-                  >
-                    Visiting consultant
-                  </button>
-                </div>
-              </Field>
-
-              {visiting && (
-                <Field label="Visiting note">
-                  <input
-                    value={visitingNote}
-                    onChange={(e) => setVisitingNote(e.target.value)}
-                    placeholder="Last Saturday each month · 9:00 AM – 2:00 PM"
-                    className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
-                  />
-                </Field>
-              )}
-
-              <Field label="Status">
-                <div className="flex flex-wrap gap-1.5">
-                  {(["active", "on_leave", "inactive"] as DoctorStatus[]).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setStatus(s)}
-                      className={
-                        "rounded-pill px-3 py-1.5 text-[12px] font-medium capitalize " +
-                        (status === s ? "bg-brand text-white" : "border border-border bg-white text-heading")
-                      }
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Primary specialty">
+                    <select
+                      {...register("primarySpecialty")}
+                      className={inputCls(false) + " cursor-pointer"}
                     >
-                      {s.replace("_", " ")}
-                    </button>
-                  ))}
+                      {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Years of experience" error={errors.yearsExperience?.message}>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={80}
+                      {...register("yearsExperience")}
+                      placeholder="12"
+                      className={inputCls(!!errors.yearsExperience)}
+                    />
+                  </Field>
                 </div>
-              </Field>
-            </Section>
 
-            <Section label="Weekly hours">
-              <p className="-mt-1 mb-2 text-[11px] text-[#9aa9b8]">
-                Tap a day to toggle. Set start &amp; end times for active days. Fine-tune later from the Schedule tab.
-              </p>
-              <div className="space-y-1.5">
-                {WEEKDAYS.map((d) => {
-                  const range = schedule[d]?.[0];
-                  const active = Boolean(range);
-                  return (
-                    <div key={d} className="flex items-center gap-2 rounded-md border border-border bg-white p-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleDay(d)}
-                        className={
-                          "w-14 cursor-pointer rounded-md px-2 py-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] " +
-                          (active ? "bg-brand text-white" : "bg-surface-muted text-muted")
-                        }
-                      >
-                        {WEEKDAY_LABEL[d]}
-                      </button>
-                      {active && range ? (
-                        <>
-                          <input
-                            type="time"
-                            value={range.start}
-                            onChange={(e) => updateRange(d, "start", e.target.value)}
-                            className="rounded-sm border border-border bg-white px-2 py-1 text-[12px] text-heading outline-none focus:border-link-hover"
-                          />
-                          <span className="text-[12px] text-muted">to</span>
-                          <input
-                            type="time"
-                            value={range.end}
-                            onChange={(e) => updateRange(d, "end", e.target.value)}
-                            className="rounded-sm border border-border bg-white px-2 py-1 text-[12px] text-heading outline-none focus:border-link-hover"
-                          />
-                        </>
-                      ) : (
-                        <span className="text-[12px] italic text-[#9aa9b8]">Off</span>
-                      )}
+                <Field label="Trained at" error={errors.trainedAt?.message}>
+                  <input
+                    {...register("trainedAt")}
+                    placeholder="BCB Dental College, Cuttack"
+                    className={inputCls(!!errors.trainedAt)}
+                  />
+                </Field>
+              </Section>
+
+              <Section label="Contact">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Phone" required error={errors.phone?.message}>
+                    <div className="flex gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3 text-[14px] text-heading">🇮🇳 +91</span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        {...register("phone")}
+                        placeholder="98765 43210"
+                        className={inputCls(!!errors.phone)}
+                      />
                     </div>
-                  );
-                })}
-              </div>
-            </Section>
-          </div>
+                  </Field>
+                  <Field label="Email" error={errors.email?.message}>
+                    <input
+                      type="email"
+                      {...register("email")}
+                      placeholder="dr.name@clinic.in"
+                      className={inputCls(!!errors.email)}
+                    />
+                  </Field>
+                </div>
 
-          <div className="flex items-center gap-2.5 border-t border-border bg-surface-muted px-5 py-3.5">
-            <Dialog.Close className="cursor-pointer rounded-md border border-border bg-white px-4 py-2 text-[13px] font-medium text-muted">
-              Cancel
-            </Dialog.Close>
-            <div className="ml-auto flex items-center gap-3">
-              {!canSubmit && (
-                <span className="hidden text-[12px] text-[#9aa9b8] sm:inline">
-                  <i className="fas fa-info-circle mr-1" />
-                  Fill required fields to enable
+                <Field label="Languages" required error={errors.languages?.message}>
+                  <Controller
+                    control={control}
+                    name="languages"
+                    render={({ field }) => (
+                      <div className="flex flex-wrap gap-1.5">
+                        {(["EN", "HI", "OR"] as Locale[]).map((l) => {
+                          const active = field.value.includes(l);
+                          return (
+                            <button
+                              key={l}
+                              type="button"
+                              onClick={() => {
+                                const next = active
+                                  ? field.value.filter((v) => v !== l)
+                                  : [...field.value, l];
+                                field.onChange(next);
+                              }}
+                              className={
+                                "rounded-pill px-3 py-1.5 text-[12px] font-medium transition-colors " +
+                                (active
+                                  ? "bg-brand text-white"
+                                  : "border border-border bg-white text-heading hover:border-link-hover")
+                              }
+                            >
+                              {l === "EN" ? "English" : l === "HI" ? "हिंदी" : "ଓଡ଼ିଆ"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  />
+                </Field>
+              </Section>
+
+              <Section label="Role">
+                <Field label="Type">
+                  <Controller
+                    control={control}
+                    name="visiting"
+                    render={({ field }) => (
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => field.onChange(false)}
+                          className={
+                            "rounded-pill px-3 py-1.5 text-[12px] font-medium " +
+                            (!field.value ? "bg-brand text-white" : "border border-border bg-white text-heading")
+                          }
+                        >
+                          Everyday team
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => field.onChange(true)}
+                          className={
+                            "rounded-pill px-3 py-1.5 text-[12px] font-medium " +
+                            (field.value ? "bg-brand text-white" : "border border-border bg-white text-heading")
+                          }
+                        >
+                          Visiting consultant
+                        </button>
+                      </div>
+                    )}
+                  />
+                </Field>
+
+                {visiting && (
+                  <Field label="Visiting note" error={errors.visitingNote?.message}>
+                    <input
+                      {...register("visitingNote")}
+                      placeholder="Last Saturday each month · 9:00 AM – 2:00 PM"
+                      className={inputCls(!!errors.visitingNote)}
+                    />
+                  </Field>
+                )}
+
+                <Field label="Status">
+                  <Controller
+                    control={control}
+                    name="status"
+                    render={({ field }) => (
+                      <div className="flex flex-wrap gap-1.5">
+                        {(["active", "on_leave", "inactive"] as DoctorStatus[]).map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => field.onChange(s)}
+                            className={
+                              "rounded-pill px-3 py-1.5 text-[12px] font-medium capitalize " +
+                              (field.value === s ? "bg-brand text-white" : "border border-border bg-white text-heading")
+                            }
+                          >
+                            {s.replace("_", " ")}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  />
+                </Field>
+              </Section>
+
+              <Section label="Weekly hours">
+                <p className="-mt-1 mb-2 text-[11px] text-[#9aa9b8]">
+                  Tap a day to toggle. Set start &amp; end times for active days. Fine-tune later from the Schedule tab.
+                </p>
+                <Controller
+                  control={control}
+                  name="schedule"
+                  render={({ field }) => (
+                    <div className="space-y-1.5">
+                      {WEEKDAYS.map((d) => {
+                        const ranges = (field.value as WeeklySchedule)[d];
+                        const range  = ranges?.[0];
+                        const active = Boolean(range);
+                        return (
+                          <div key={d} className="flex items-center gap-2 rounded-md border border-border bg-white p-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = { ...(field.value as WeeklySchedule) };
+                                if (active) delete next[d];
+                                else next[d] = [DEFAULT_RANGE];
+                                field.onChange(next);
+                              }}
+                              className={
+                                "w-14 cursor-pointer rounded-md px-2 py-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] " +
+                                (active ? "bg-brand text-white" : "bg-surface-muted text-muted")
+                              }
+                            >
+                              {WEEKDAY_LABEL[d]}
+                            </button>
+                            {active && range ? (
+                              <>
+                                <input
+                                  type="time"
+                                  value={range.start}
+                                  onChange={(e) => {
+                                    const next = { ...(field.value as WeeklySchedule) };
+                                    next[d] = [{ start: e.target.value, end: range.end }];
+                                    field.onChange(next);
+                                  }}
+                                  className="rounded-sm border border-border bg-white px-2 py-1 text-[12px] text-heading outline-none focus:border-link-hover"
+                                />
+                                <span className="text-[12px] text-muted">to</span>
+                                <input
+                                  type="time"
+                                  value={range.end}
+                                  onChange={(e) => {
+                                    const next = { ...(field.value as WeeklySchedule) };
+                                    next[d] = [{ start: range.start, end: e.target.value }];
+                                    field.onChange(next);
+                                  }}
+                                  className="rounded-sm border border-border bg-white px-2 py-1 text-[12px] text-heading outline-none focus:border-link-hover"
+                                />
+                              </>
+                            ) : (
+                              <span className="text-[12px] italic text-[#9aa9b8]">Off</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                />
+                {errors.schedule?.message && (
+                  <p className="mt-1 text-[12px] text-danger">{errors.schedule.message}</p>
+                )}
+              </Section>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 border-t border-border bg-surface-muted px-5 py-3.5">
+              <Dialog.Close
+                disabled={isPending}
+                className="cursor-pointer rounded-md border border-border bg-white px-4 py-2 text-[13px] font-medium text-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </Dialog.Close>
+              {submitError && (
+                <span role="alert" className="order-last w-full text-[12px] text-danger sm:order-none sm:w-auto">
+                  <i className="fas fa-exclamation-triangle mr-1" />
+                  {submitError}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className={
-                  "inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-5 py-2 text-[14px] font-semibold text-cta-fg transition-colors hover:bg-[#d92843] " +
-                  (!canSubmit ? "cursor-not-allowed opacity-50 hover:bg-cta" : "")
-                }
-              >
-                <i className="fas fa-user-md text-[12px]" />
-                Add doctor
-              </button>
+              <div className="ml-auto flex items-center gap-3">
+                {!isValid && !isPending && (
+                  <span className="hidden text-[12px] text-[#9aa9b8] sm:inline">
+                    <i className="fas fa-info-circle mr-1" />
+                    Fix the highlighted fields to submit
+                  </span>
+                )}
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className={
+                    "inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-5 py-2 text-[14px] font-semibold text-cta-fg transition-colors hover:bg-[#d92843] " +
+                    (isPending ? "cursor-not-allowed opacity-50 hover:bg-cta" : "")
+                  }
+                >
+                  {isPending ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin text-[12px]" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-user-md text-[12px]" />
+                      Add doctor
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
+          </form>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+// =============================================================================
+// Small bits
+// =============================================================================
+
+function inputCls(hasError: boolean): string {
+  const base =
+    "w-full rounded-md border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover";
+  return hasError ? `${base} border-danger focus:border-danger` : `${base} border-border`;
 }
 
 function Section({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
@@ -428,7 +594,17 @@ function Section({ label, required, children }: { label: string; required?: bool
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  error,
+  children,
+}: {
+  label:    string;
+  required?: boolean;
+  error?:    string;
+  children:  React.ReactNode;
+}) {
   return (
     <div>
       <label className="mb-1.5 block text-[12px] font-medium text-heading">
@@ -436,6 +612,11 @@ function Field({ label, required, children }: { label: string; required?: boolea
         {required && <span className="ml-1 text-cta">*</span>}
       </label>
       {children}
+      {error && (
+        <p role="alert" className="mt-1 text-[12px] text-danger">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -6,15 +6,18 @@ import {
   WhatsAppQuickReplies,
 } from "@/components/molecules/WhatsAppMessagePreview";
 import { WhatsAppPhoneFrame } from "@/components/molecules/WhatsAppPhoneFrame";
-import type { BookingDoctor, BookingService } from "@/lib/booking-data";
+type SuccessService = { id: string; name: string; durationMinutes: number; feeLabel: string };
+type SuccessDoctor  = { id: string; name: string; credential: string };
 
 type Props = {
-  service: BookingService;
-  doctor: BookingDoctor | null;
-  date: string;
-  slot: string;
-  bookingRef: string;
+  service:      SuccessService;
+  doctor:       SuccessDoctor | null;
+  date:         string;
+  slot:         string;
+  bookingRef:   string;
   maskedMobile: string;
+  clinicName?:    string;
+  clinicAddress?: string;
 };
 
 const CHAT_BG_PATTERN =
@@ -27,6 +30,8 @@ export function BookingSuccess({
   slot,
   bookingRef,
   maskedMobile,
+  clinicName,
+  clinicAddress,
 }: Props) {
   return (
     <div className="mx-auto max-w-[1080px] overflow-hidden rounded-lg bg-white shadow-md">
@@ -95,6 +100,8 @@ export function BookingSuccess({
             doctor={doctor}
             date={date}
             slot={slot}
+            clinicName={clinicName}
+            clinicAddress={clinicAddress}
           />
 
           <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5 md:mt-6">

@@ -2,7 +2,8 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { getAttachmentSignedUrlAction } from "@/app/(clinic-app)/admin/attachments/actions";
 import { MedicalAlertsBanner } from "@/components/molecules/MedicalAlertsBanner";
 import { PrescriptionDialog } from "@/components/molecules/PrescriptionDialog";
 import { RxEntryDialog } from "@/components/molecules/RxEntryDialog";
@@ -501,10 +502,31 @@ function EmptyState({ icon, label, hint }: { icon: string; label: string; hint: 
 
 function FileCard({ file }: { file: VisitAttachment & { visitDate: string; service: string } }) {
   const meta = ATTACHMENT_META[file.kind];
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const openFile = () => {
+    if (isPending) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await getAttachmentSignedUrlAction(file.id);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      window.open(result.url, "_blank", "noreferrer");
+    });
+  };
+
   return (
-    <a
-      href="#"
-      className="flex items-start gap-3 rounded-md border border-border bg-white p-3 no-underline transition-colors hover:border-link-hover"
+    <button
+      type="button"
+      onClick={openFile}
+      disabled={isPending}
+      className={
+        "flex w-full items-start gap-3 rounded-md border border-border bg-white p-3 text-left transition-colors hover:border-link-hover " +
+        (isPending ? "cursor-wait opacity-70" : "cursor-pointer")
+      }
     >
       <span
         className="grid h-10 w-10 flex-none place-items-center rounded-md text-[14px]"
@@ -520,9 +542,19 @@ function FileCard({ file }: { file: VisitAttachment & { visitDate: string; servi
         <div className="mt-0.5 text-[11px] text-[#9aa9b8]">
           {formatVisitDate(file.visitDate)} · {file.service}
         </div>
+        {error && (
+          <div className="mt-1 text-[11px] text-danger">
+            <i className="fas fa-exclamation-triangle mr-1" /> {error}
+          </div>
+        )}
       </div>
-      <i className="fas fa-download mt-1 text-[11px] text-[#9aa9b8]" />
-    </a>
+      <i
+        className={
+          "mt-1 text-[11px] " +
+          (isPending ? "fas fa-spinner fa-spin text-[#9aa9b8]" : "fas fa-download text-[#9aa9b8]")
+        }
+      />
+    </button>
   );
 }
 

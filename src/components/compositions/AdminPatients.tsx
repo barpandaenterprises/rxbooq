@@ -4,39 +4,10 @@ import * as Popover from "@radix-ui/react-popover";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import type { PatientLang, PatientRow } from "@/lib/data/admin-patients";
 
-type Lang = "EN" | "HI" | "OR";
-
-type Patient = {
-  id: string;
-  name: string;
-  initials: string;
-  avatarBg: string;
-  avatarFg: string;
-  phone: string;
-  lang: Lang;
-  lastVisit: string; // ISO YYYY-MM-DD for sort
-  lastVisitLabel: string; // "9 May 2026"
-  visits: number;
-  ltv: number;
-  tags: string[];
-  wa: boolean;
-};
-
-const PATIENTS: Patient[] = [
-  { id: "P-1284", name: "Anita Sahu",      initials: "AS", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 98••• ••342", lang: "EN", lastVisit: "2026-05-09", lastVisitLabel: "9 May 2026",  visits: 7,  ltv: 12400, tags: ["VIP", "Root canal"], wa: true },
-  { id: "P-1283", name: "Bidyut Panda",    initials: "BP", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 96••• ••018", lang: "OR", lastVisit: "2026-05-09", lastVisitLabel: "9 May 2026",  visits: 1,  ltv: 1200,  tags: ["New"],          wa: true },
-  { id: "P-1281", name: "Sarita Mahanti",  initials: "SM", avatarBg: "#FFF8EC", avatarFg: "#7a5c2b", phone: "+91 99••• ••445", lang: "HI", lastVisit: "2026-05-02", lastVisitLabel: "2 May 2026",  visits: 4,  ltv: 8600,  tags: ["No-show"],      wa: true },
-  { id: "P-1278", name: "Manoj Behera",    initials: "MB", avatarBg: "#E6F4EC", avatarFg: "#3a8b5e", phone: "+91 95••• ••111", lang: "OR", lastVisit: "2026-04-28", lastVisitLabel: "28 Apr 2026", visits: 2,  ltv: 4200,  tags: ["Implants"],     wa: true },
-  { id: "P-1276", name: "Rajesh Mishra",   initials: "RM", avatarBg: "#F4E5FA", avatarFg: "#6b3aa1", phone: "+91 94••• ••111", lang: "HI", lastVisit: "2026-04-24", lastVisitLabel: "24 Apr 2026", visits: 3,  ltv: 3800,  tags: [],               wa: false },
-  { id: "P-1273", name: "Karthik Rao",     initials: "KR", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 70••• ••144", lang: "EN", lastVisit: "2026-04-20", lastVisitLabel: "20 Apr 2026", visits: 5,  ltv: 9750,  tags: ["Root canal"],   wa: true },
-  { id: "P-1271", name: "Pinky Sahu",      initials: "PS", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 87••• ••501", lang: "OR", lastVisit: "2026-04-18", lastVisitLabel: "18 Apr 2026", visits: 6,  ltv: 2100,  tags: ["Pediatric"],    wa: true },
-  { id: "P-1268", name: "Susmita Dash",    initials: "SD", avatarBg: "#FFF8EC", avatarFg: "#7a5c2b", phone: "+91 99••• ••015", lang: "EN", lastVisit: "2026-04-15", lastVisitLabel: "15 Apr 2026", visits: 9,  ltv: 18300, tags: ["VIP"],          wa: true },
-  { id: "P-1265", name: "Suresh Pati",     initials: "SP", avatarBg: "#E6F4EC", avatarFg: "#3a8b5e", phone: "+91 89••• ••445", lang: "OR", lastVisit: "2026-04-12", lastVisitLabel: "12 Apr 2026", visits: 14, ltv: 24500, tags: ["Braces"],       wa: true },
-  { id: "P-1262", name: "Laxmi Pradhan",   initials: "LP", avatarBg: "#F4E5FA", avatarFg: "#6b3aa1", phone: "+91 90••• ••512", lang: "HI", lastVisit: "2026-04-08", lastVisitLabel: "8 Apr 2026",  visits: 2,  ltv: 2800,  tags: ["Cancelled"],    wa: false },
-  { id: "P-1259", name: "Priya Sahu",      initials: "PS", avatarBg: "#FFE7EC", avatarFg: "#EE344E", phone: "+91 93••• ••901", lang: "OR", lastVisit: "2026-04-07", lastVisitLabel: "7 Apr 2026",  visits: 3,  ltv: 5400,  tags: ["Root canal"],   wa: true },
-  { id: "P-1257", name: "Anita Mohanti",   initials: "AM", avatarBg: "#E6F1FA", avatarFg: "#0E5087", phone: "+91 98••• ••611", lang: "EN", lastVisit: "2026-04-05", lastVisitLabel: "5 Apr 2026",  visits: 8,  ltv: 14200, tags: [],               wa: true },
-];
+type Lang = PatientLang;
+type Patient = PatientRow;
 
 const ALL_TAGS = ["VIP", "New", "No-show", "Root canal", "Implants", "Pediatric", "Braces", "Cancelled"];
 
@@ -204,7 +175,8 @@ function FilterPill({
   );
 }
 
-export function AdminPatients() {
+export function AdminPatients({ initialPatients }: { initialPatients: Patient[] }) {
+  const patients = initialPatients;
   const [search, setSearch] = useState("");
   const [lang, setLang] = useState<Lang | "all">("all");
   const [tags, setTags] = useState<Set<string>>(new Set());
@@ -221,7 +193,7 @@ export function AdminPatients() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const qDigits = search.replace(/\D/g, "");
-    return PATIENTS.filter((p) => {
+    return patients.filter((p) => {
       if (q.length > 0) {
         const matchesName = p.name.toLowerCase().includes(q);
         const matchesPhone = qDigits.length > 0 && p.phone.replace(/\D/g, "").includes(qDigits);
@@ -229,11 +201,12 @@ export function AdminPatients() {
       }
       if (lang !== "all" && p.lang !== lang) return false;
       if (tags.size > 0 && !p.tags.some((t) => tags.has(t))) return false;
+      if (visitWindow !== "any" && !p.lastVisit) return false;
       if (!visitWithinWindow(p.lastVisit, visitWindow)) return false;
       if (waOnly && !p.wa) return false;
       return true;
     });
-  }, [search, lang, tags, visitWindow, waOnly]);
+  }, [patients, search, lang, tags, visitWindow, waOnly]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -297,7 +270,7 @@ export function AdminPatients() {
             Patients
           </h2>
           <div className="mt-1 text-[14px] text-muted">
-            <strong className="text-heading">{PATIENTS.length} patients</strong>
+            <strong className="text-heading">{patients.length} patients</strong>
             <span className="mx-2 text-[#9aa9b8]">·</span>
             18 added this week
             <span className="mx-2 text-[#9aa9b8]">·</span>
@@ -507,8 +480,8 @@ export function AdminPatients() {
           <i className="fas fa-info-circle text-[13px] text-cta" />
           <span>
             <strong>{visible.length} of {sorted.length}</strong>
-            {sorted.length !== PATIENTS.length && (
-              <> matching · <button type="button" onClick={clearAll} className="text-link-hover underline">show all {PATIENTS.length}</button></>
+            {sorted.length !== patients.length && (
+              <> matching · <button type="button" onClick={clearAll} className="text-link-hover underline">show all {patients.length}</button></>
             )}
           </span>
           <span className="ml-auto text-[12px] text-[#9aa9b8]">
@@ -559,7 +532,7 @@ export function AdminPatients() {
                     </span>
                     <div>
                       <div className="text-[14px] font-semibold text-heading">{p.name}</div>
-                      <div className="font-mono text-[11px] text-[#9aa9b8]">{p.id}</div>
+                      <div className="font-mono text-[11px] text-[#9aa9b8]">{p.displayId}</div>
                     </div>
                   </div>
                 </td>

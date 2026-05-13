@@ -10,6 +10,7 @@ import {
   formatVisitDate,
   findChart,
   type AttachmentKind,
+  type Chart,
 } from "@/lib/patient-history-data";
 
 type StatusKey = "today" | "tomorrow" | "confirmed" | "pending";
@@ -153,7 +154,7 @@ function RecommendCard() {
   );
 }
 
-export function PatientPortal() {
+export function PatientPortal({ initialChart }: { initialChart?: Chart | null } = {}) {
   const searchParams = useSearchParams();
   const initial = isTabValue(searchParams.get("tab")) ? (searchParams.get("tab") as TabValue) : "upcoming";
   const [tab, setTab] = useState<TabValue>(initial);
@@ -175,7 +176,7 @@ export function PatientPortal() {
     window.history.replaceState({}, "", url.toString());
   };
 
-  const chart = findChart(DEMO_PATIENT_ID);
+  const chart = initialChart ?? findChart(DEMO_PATIENT_ID);
   const patient = chart?.patient;
   const visits = chart?.visits ?? [];
   const allFiles = visits.flatMap((v) =>

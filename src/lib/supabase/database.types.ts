@@ -1,18 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * Auto-generated Supabase types.
+ * Placeholder Supabase database types.
  *
- * Run `npm run db:types` after applying migrations to regenerate this file:
- *   supabase gen types typescript --linked > src/lib/supabase/database.types.ts
+ * Replaced by the real generated types after running:
+ *   npm run db:types
  *
- * The placeholder type below is intentionally permissive so the project
- * compiles before the first migration is applied.
+ * Until then, the Database type is intentionally `any`-shaped so queries with
+ * Supabase's select-string parser compile. Real types arrive with the first
+ * generation and unlock end-to-end type safety.
  */
-export type Database = {
-  public: {
-    Tables: Record<string, { Row: any; Insert: any; Update: any }>;
-    Views: Record<string, { Row: any }>;
-    Functions: Record<string, any>;
-    Enums: Record<string, any>;
-    CompositeTypes: Record<string, any>;
-  };
-};
+
+export type Database = any;

@@ -1,194 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import { sendInboxReplyAction } from "@/app/(clinic-app)/admin/messages/actions";
+import type { Bubble, Thread, ThreadStatus } from "@/lib/data/admin-messages";
 
-type ThreadStatus = "delivered" | "read" | "replied" | "failed" | "optout";
 type ThreadFilter = "All" | "Unread" | "Failed" | "Replied";
 
-type Bubble =
-  | { kind: "out"; tpl: string; status: ThreadStatus; ts: string; body: string; failed?: boolean }
-  | { kind: "in"; ts: string; body: string };
-
-type Thread = {
-  id: string;
-  name: string;
-  initials: string;
-  avatarBg: string;
-  avatarFg: string;
-  phone: string;
-  lastTpl: string;
-  status: ThreadStatus;
-  ts: string;
-  preview: string;
-  unread?: boolean;
-  failed?: boolean;
-  optout?: boolean;
-  bubbles: Bubble[];
-  context?: { service: string; date: string; doctor: string; bookingId: string };
-};
-
-const THREADS: Thread[] = [
-  {
-    id: "t1",
-    name: "Bidyut Panda",
-    initials: "BP",
-    avatarBg: "#E6F1FA",
-    avatarFg: "#0E5087",
-    phone: "+91 96••• ••018",
-    lastTpl: "booking_confirmation_v1",
-    status: "replied",
-    ts: "just now",
-    preview: "Yes please confirm",
-    unread: true,
-    context: {
-      service: "Tooth extraction · 9 May 2026, 3:30 PM",
-      date: "9 May 2026",
-      doctor: "Dr. Manoranjan Mahakur · 30 min",
-      bookingId: "DK-3942",
-    },
-    bubbles: [
-      { kind: "out", tpl: "booking_confirmation_v1", status: "read", ts: "3:31 PM",
-        body: `Hi Bidyut, your appointment at Mahakur Poly Dental is booked.\nTooth extraction · 9 May 2026, 3:30 PM with Dr. Manoranjan Mahakur.\n\nPlease reply YES to confirm or RESCHEDULE.` },
-      { kind: "in",  ts: "3:32 PM", body: "YES" },
-      { kind: "out", tpl: "reminder_24h_v2", status: "read", ts: "2:30 PM",
-        body: `Reminder: your appointment is in 1 hour at Mahakur Poly Dental, Bhatra Chowk.\nReply 1 to confirm, 2 to reschedule.` },
-      { kind: "in", ts: "2:33 PM", body: "Yes please confirm" },
-      { kind: "out", tpl: "customer_care_reply", status: "failed", ts: "3:01 PM", failed: true,
-        body: "Thanks Bidyut! See you at 3:30 PM. Please arrive 5 min early." },
-    ],
-  },
-  {
-    id: "t2",
-    name: "Anita Sahu",
-    initials: "AS",
-    avatarBg: "#FFE7EC",
-    avatarFg: "#EE344E",
-    phone: "+91 98••• ••342",
-    lastTpl: "reminder_24h_v2",
-    status: "read",
-    ts: "2m",
-    preview: "See you tomorrow at 5:30 PM",
-    bubbles: [
-      { kind: "out", tpl: "reminder_24h_v2", status: "read", ts: "Yesterday 5:30 PM",
-        body: "Reminder: your Root Canal · S2 visit with Dr. Manoranjan is tomorrow at 5:30 PM. Reply 1 to confirm." },
-      { kind: "in", ts: "Yesterday 5:32 PM", body: "1" },
-      { kind: "in", ts: "2 min ago", body: "See you tomorrow at 5:30 PM" },
-    ],
-  },
-  {
-    id: "t3",
-    name: "Sarita Mahanti",
-    initials: "SM",
-    avatarBg: "#FFF8EC",
-    avatarFg: "#7a5c2b",
-    phone: "+91 99••• ••445",
-    lastTpl: "noshow_followup_v1",
-    status: "failed",
-    ts: "14m",
-    preview: "undelivered · phone unreachable",
-    failed: true,
-    bubbles: [
-      { kind: "out", tpl: "noshow_followup_v1", status: "failed", ts: "14 min ago", failed: true,
-        body: "Hi Sarita, we missed you at your Whitening appointment today. Reply 2 to reschedule." },
-    ],
-  },
-  {
-    id: "t4",
-    name: "Karthik Rao",
-    initials: "KR",
-    avatarBg: "#FFE7EC",
-    avatarFg: "#EE344E",
-    phone: "+91 70••• ••144",
-    lastTpl: "booking_confirmation_v1",
-    status: "read",
-    ts: "18m",
-    preview: "Got it, thanks",
-    bubbles: [
-      { kind: "out", tpl: "booking_confirmation_v1", status: "read", ts: "20 min ago", body: "Hi Karthik, your Cleaning appointment is booked for 10 May, 9:00 AM with Dr. Lipsa." },
-      { kind: "in", ts: "18 min ago", body: "Got it, thanks" },
-    ],
-  },
-  {
-    id: "t5",
-    name: "Pinky Sahu",
-    initials: "PS",
-    avatarBg: "#E6F1FA",
-    avatarFg: "#0E5087",
-    phone: "+91 87••• ••501",
-    lastTpl: "booking_confirmation_v1",
-    status: "read",
-    ts: "22m",
-    preview: "OK",
-    bubbles: [
-      { kind: "out", tpl: "booking_confirmation_v1", status: "read", ts: "23 min ago", body: "Hi Pinky, your Pediatric checkup is booked for 12 May, 10:30 AM." },
-      { kind: "in", ts: "22 min ago", body: "OK" },
-    ],
-  },
-  {
-    id: "t6",
-    name: "Suresh Pati",
-    initials: "SP",
-    avatarBg: "#E6F4EC",
-    avatarFg: "#3a8b5e",
-    phone: "+91 89••• ••445",
-    lastTpl: "reminder_24h_v2",
-    status: "replied",
-    ts: "31m",
-    preview: "Can we move to 4 PM?",
-    bubbles: [
-      { kind: "out", tpl: "reminder_24h_v2", status: "read", ts: "33 min ago", body: "Reminder: your Braces fitting tomorrow at 11:00 AM. Reply 2 to reschedule." },
-      { kind: "in", ts: "31 min ago", body: "Can we move to 4 PM?" },
-    ],
-  },
-  {
-    id: "t7",
-    name: "Manoj Behera",
-    initials: "MB",
-    avatarBg: "#E6F4EC",
-    avatarFg: "#3a8b5e",
-    phone: "+91 95••• ••111",
-    lastTpl: "reminder_24h_v2",
-    status: "delivered",
-    ts: "46m",
-    preview: "—",
-    bubbles: [
-      { kind: "out", tpl: "reminder_24h_v2", status: "delivered", ts: "46 min ago", body: "Reminder: implant consult tomorrow at 12:00 PM with Dr. Manoranjan." },
-    ],
-  },
-  {
-    id: "t8",
-    name: "Laxmi Pradhan",
-    initials: "LP",
-    avatarBg: "#F4E5FA",
-    avatarFg: "#6b3aa1",
-    phone: "+91 90••• ••512",
-    lastTpl: "cancellation_ack_v1",
-    status: "read",
-    ts: "1h",
-    preview: "Thanks for confirming.",
-    bubbles: [
-      { kind: "out", tpl: "cancellation_ack_v1", status: "read", ts: "1 hr ago", body: "Your Cleaning appointment on 9 May has been cancelled." },
-      { kind: "in", ts: "58 min ago", body: "Thanks for confirming." },
-    ],
-  },
-  {
-    id: "t9",
-    name: "Rajesh Mishra",
-    initials: "RM",
-    avatarBg: "#F4F5F7",
-    avatarFg: "#9aa9b8",
-    phone: "+91 94••• ••111",
-    lastTpl: "reminder_24h_v2",
-    status: "optout",
-    ts: "2d",
-    preview: "STOP",
-    optout: true,
-    bubbles: [
-      { kind: "out", tpl: "reminder_24h_v2", status: "delivered", ts: "2 days ago", body: "Reminder: your Consultation tomorrow." },
-      { kind: "in", ts: "2 days ago", body: "STOP" },
-    ],
-  },
-];
 
 const TEMPLATES = [
   { id: "customer_care_reply",      label: "customer_care_reply",      preview: "Thanks {{name}}! See you at {{time}}." },
@@ -355,8 +173,12 @@ function ContextCard({ thread }: { thread: Thread }) {
   );
 }
 
-export function AdminMessages() {
-  const [activeId, setActiveId] = useState<string>(THREADS[0]!.id);
+export function AdminMessages({ initialThreads }: { initialThreads: Thread[] }) {
+  const threads = initialThreads;
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(threads[0]?.id ?? null);
   const [filter, setFilter] = useState<ThreadFilter>("All");
   const [search, setSearch] = useState("");
   const [composer, setComposer] = useState("");
@@ -364,15 +186,15 @@ export function AdminMessages() {
   const [templateOpen, setTemplateOpen] = useState(false);
 
   const counts = useMemo(() => ({
-    All:     THREADS.length,
-    Unread:  THREADS.filter((t) => t.unread).length,
-    Failed:  THREADS.filter((t) => t.failed).length,
-    Replied: THREADS.filter((t) => t.status === "replied").length,
-  }), []);
+    All:     threads.length,
+    Unread:  threads.filter((t) => t.unread).length,
+    Failed:  threads.filter((t) => t.failed).length,
+    Replied: threads.filter((t) => t.status === "replied").length,
+  }), [threads]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return THREADS.filter((t) => {
+    return threads.filter((t) => {
       if (q && !t.name.toLowerCase().includes(q) && !t.preview.toLowerCase().includes(q)) return false;
       switch (filter) {
         case "Unread":  return Boolean(t.unread);
@@ -381,11 +203,43 @@ export function AdminMessages() {
         case "All":     return true;
       }
     });
-  }, [filter, search]);
+  }, [threads, filter, search]);
 
-  const active = THREADS.find((t) => t.id === activeId) ?? THREADS[0]!;
+  if (threads.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center">
+        <div>
+          <i className="fab fa-whatsapp text-[42px] text-[#cdd9e4]" />
+          <p className="mt-3 text-[14px] text-muted">No WhatsApp conversations yet.</p>
+          <p className="mt-1 text-[12px] text-[#9aa9b8]">
+            Messages sent through Interakt will appear here once they&apos;re delivered.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const active   = threads.find((t) => t.id === activeId) ?? threads[0]!;
   const template = TEMPLATES.find((tpl) => tpl.id === templateId) ?? TEMPLATES[0]!;
-  const canSend = composer.trim().length > 0 && !active.optout;
+  const canSend  = composer.trim().length > 0 && !active.optout && !isPending;
+
+  const handleSend = () => {
+    if (!canSend) return;
+    setSendError(null);
+    const text = composer.trim();
+    startTransition(async () => {
+      const result = await sendInboxReplyAction({
+        patientId: active.id,
+        text,
+      });
+      if (!result.ok) {
+        setSendError(result.error);
+        return;
+      }
+      setComposer("");
+      router.refresh();
+    });
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -403,7 +257,7 @@ export function AdminMessages() {
             Interakt webhook · healthy
           </span>
           <span className="text-[12px] text-[#9aa9b8]">
-            · {THREADS.length} conversations · {counts.Unread} unread
+            · {threads.length} conversations · {counts.Unread} unread
           </span>
           <div className="ml-auto flex gap-2.5">
             <button
@@ -565,6 +419,12 @@ export function AdminMessages() {
                 ? "Patient opted out. Composer disabled."
                 : "Outside the 24-hour window — only approved templates can be sent."}
             </div>
+            {sendError && (
+              <div role="alert" className="mb-2.5 rounded-md border border-danger/30 bg-red-50 px-3 py-2 text-[12px] text-danger">
+                <i className="fas fa-exclamation-triangle mr-1.5" />
+                {sendError}
+              </div>
+            )}
             <div className="flex flex-wrap items-stretch gap-2">
               {/* Template picker (Popover-equivalent built inline so we don't add another import) */}
               <div className="relative">
@@ -605,14 +465,11 @@ export function AdminMessages() {
               <textarea
                 value={composer}
                 onChange={(e) => setComposer(e.target.value)}
-                disabled={active.optout}
+                disabled={active.optout || isPending}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    if (canSend) {
-                      // Demo: clear the composer, would post to Interakt in production.
-                      setComposer("");
-                    }
+                    handleSend();
                   }
                 }}
                 placeholder={active.optout ? "Patient is opted out" : "Type a reply, or pick a template…"}
@@ -622,7 +479,7 @@ export function AdminMessages() {
 
               <button
                 type="button"
-                disabled={active.optout}
+                disabled={active.optout || isPending}
                 className="inline-flex items-center gap-2 rounded-md border-[1.5px] border-link-hover bg-transparent px-3.5 py-2 text-[13px] font-medium text-link-hover hover:bg-link-hover hover:text-white disabled:opacity-50"
               >
                 <i className="fas fa-eye" /> Preview
@@ -630,13 +487,21 @@ export function AdminMessages() {
               <button
                 type="button"
                 disabled={!canSend}
-                onClick={() => setComposer("")}
+                onClick={handleSend}
                 className={
                   "inline-flex items-center gap-2 rounded-md bg-cta px-4 py-2 text-[13px] font-medium text-cta-fg transition-colors " +
                   (canSend ? "hover:bg-[#d92843]" : "cursor-not-allowed opacity-50")
                 }
               >
-                <i className="fab fa-whatsapp" /> Send
+                {isPending ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin text-[11px]" /> Sending…
+                  </>
+                ) : (
+                  <>
+                    <i className="fab fa-whatsapp" /> Send
+                  </>
+                )}
               </button>
             </div>
           </div>

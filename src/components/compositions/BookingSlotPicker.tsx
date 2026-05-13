@@ -9,12 +9,8 @@ import {
   type BookingDate,
 } from "@/components/molecules/DateStripPill";
 import { SlotPill, type SlotState } from "@/components/molecules/SlotPill";
-import {
-  formatLongDate,
-  formatSlotLabel,
-  toLocalIso,
-  type BookingService,
-} from "@/lib/booking-data";
+import { formatLongDate, formatSlotLabel, toLocalIso } from "@/lib/booking-data";
+import type { PublicService } from "@/lib/data/public-booking";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_LABELS = [
@@ -35,20 +31,13 @@ const MONTH_LABELS = [
 const DESKTOP_PAGE_SIZE = 9;
 const TOTAL_DAYS = 14;
 
-const BOOKED_SLOTS = new Set([
-  "10:30",
-  "11:00",
-  "13:00",
-  "13:30",
-  "15:30",
-  "17:30",
-]);
 const LUNCH_SLOTS = new Set(["14:00", "14:30"]);
-const JUST_TAKEN_SLOT = "11:30";
 
 type Props = {
-  service: BookingService;
-  doctorId?: string | null;
+  service:        PublicService;
+  doctorId?:      string | null;
+  /** Map of ISO date → list of "HH:mm" slots already taken (booked + held). */
+  bookedByDate?:  Record<string, string[]>;
 };
 
 function buildDates(): BookingDate[] {
@@ -85,7 +74,7 @@ function buildSlots() {
   return out;
 }
 
-export function BookingSlotPicker({ service, doctorId }: Props) {
+export function BookingSlotPicker({ service, doctorId, bookedByDate = {} }: Props) {
   const router = useRouter();
   const dates = useMemo(buildDates, []);
   const slots = useMemo(buildSlots, []);
@@ -102,8 +91,13 @@ export function BookingSlotPicker({ service, doctorId }: Props) {
     Math.min(pageOffset + DESKTOP_PAGE_SIZE, TOTAL_DAYS),
   );
 
+  const bookedForDate = useMemo(
+    () => new Set(bookedByDate[selectedDate] ?? []),
+    [bookedByDate, selectedDate],
+  );
+
   const openSlotCount = slots.filter(
-    (s) => !BOOKED_SLOTS.has(s.short) && !LUNCH_SLOTS.has(s.short),
+    (s) => !bookedForDate.has(s.short) && !LUNCH_SLOTS.has(s.short),
   ).length;
 
   const handleContinue = () => {
@@ -131,9 +125,9 @@ export function BookingSlotPicker({ service, doctorId }: Props) {
             <span className="flex-1 text-[14px] font-medium text-heading">
               {service.name}
               <span className="mx-1.5 text-[#9aa9b8]">·</span>
-              <span className="font-normal text-muted">{service.duration}</span>
+              <span className="font-normal text-muted">{service.durationMinutes} min</span>
               <span className="mx-1.5 text-[#9aa9b8]">·</span>
-              <span className="font-semibold text-link-hover">{service.fee}</span>
+              <span className="font-semibold text-link-hover">{service.feeLabel}</span>
             </span>
             <Link
               href="/book"
@@ -241,9 +235,8 @@ export function BookingSlotPicker({ service, doctorId }: Props) {
               }
 
               let state: SlotState = "available";
-              if (BOOKED_SLOTS.has(slot.short)) state = "booked";
+              if (bookedForDate.has(slot.short)) state = "booked";
               else if (slot.short === selectedSlot) state = "selected";
-              else if (slot.short === JUST_TAKEN_SLOT) state = "just-taken";
 
               return (
                 <SlotPill

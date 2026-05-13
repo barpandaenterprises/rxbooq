@@ -3,9 +3,19 @@
 // Admin · /admin/analytics — KPI strip, line chart, top services, language donut, microsite, no-show table
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo } from "react";
+import type {
+  AdminAnalyticsData,
+  AnalyticsPeriod,
+  BookingPoint,
+  LangSlice,
+  MicrositeTile,
+  NoShowRow,
+  ServiceBar,
+} from "@/lib/data/admin-analytics";
 
-type Period = "7d" | "30d" | "90d" | "custom";
+type Period = AnalyticsPeriod | "custom";
 
 const PERIOD_LABEL: Record<Period, string> = {
   "7d": "Last 7 days",
@@ -13,62 +23,6 @@ const PERIOD_LABEL: Record<Period, string> = {
   "90d": "Last 90 days",
   "custom": "Custom range",
 };
-
-/** Period-aware KPI values, so toggling pills produces visible movement. */
-const KPIS_BY_PERIOD: Record<Period, { newPatients: string; bookings: string; noShow: string; revenue: string; deltas: { newPatients: string; bookings: string; noShow: string; revenue: string } }> = {
-  "7d":     { newPatients: "22",  bookings: "96",   noShow: "4.1%",  revenue: "₹84,000",  deltas: { newPatients: "+18%", bookings: "+9%",  noShow: "−2.1 pts", revenue: "+12%" } },
-  "30d":    { newPatients: "84",  bookings: "412",  noShow: "6.3%",  revenue: "₹3.4 L",   deltas: { newPatients: "+22%", bookings: "+14%", noShow: "−1.8 pts", revenue: "+18%" } },
-  "90d":    { newPatients: "248", bookings: "1,240", noShow: "7.0%", revenue: "₹10.2 L",  deltas: { newPatients: "+28%", bookings: "+19%", noShow: "−0.6 pts", revenue: "+22%" } },
-  "custom": { newPatients: "84",  bookings: "412",  noShow: "6.3%",  revenue: "₹3.4 L",   deltas: { newPatients: "+22%", bookings: "+14%", noShow: "−1.8 pts", revenue: "+18%" } },
-};
-
-const BOOKING_DATA = [
-  { d: "Apr 10", online: 14, walkin: 6,  phone: 4 },
-  { d: "Apr 12", online: 18, walkin: 7,  phone: 5 },
-  { d: "Apr 14", online: 22, walkin: 5,  phone: 3 },
-  { d: "Apr 16", online: 19, walkin: 8,  phone: 6 },
-  { d: "Apr 18", online: 24, walkin: 9,  phone: 5 },
-  { d: "Apr 20", online: 28, walkin: 7,  phone: 4 },
-  { d: "Apr 22", online: 25, walkin: 10, phone: 6 },
-  { d: "Apr 24", online: 32, walkin: 8,  phone: 5 },
-  { d: "Apr 26", online: 30, walkin: 11, phone: 7 },
-  { d: "Apr 28", online: 36, walkin: 9,  phone: 4 },
-  { d: "Apr 30", online: 34, walkin: 12, phone: 6 },
-  { d: "May 02", online: 40, walkin: 10, phone: 5 },
-  { d: "May 04", online: 38, walkin: 11, phone: 7 },
-  { d: "May 06", online: 44, walkin: 9,  phone: 5 },
-  { d: "May 08", online: 48, walkin: 13, phone: 6 },
-];
-
-const SERVICES = [
-  { name: "Root Canal", conf: 42, comp: 30 },
-  { name: "Cleaning",   conf: 36, comp: 28 },
-  { name: "Braces",     conf: 24, comp: 18 },
-  { name: "Implants",   conf: 18, comp: 12 },
-  { name: "Whitening",  conf: 14, comp: 10 },
-  { name: "Pediatric",  conf: 12, comp: 8 },
-];
-
-const LANG_DATA = [
-  { label: "Odia",    value: 54, color: "#0168B3" },
-  { label: "Hindi",   value: 28, color: "#0E5087" },
-  { label: "English", value: 18, color: "#EE344E" },
-];
-
-const MICROSITE = [
-  { label: "Website visitors",   value: "4,260",  delta: "+18%", up: true,  data: [20, 22, 24, 28, 32, 30, 38, 42, 46, 48, 50, 55, 62, 66, 72] },
-  { label: "GMB impressions",    value: "12,840", delta: "+9%",  up: true,  data: [60, 65, 62, 68, 72, 70, 78, 82, 80, 86, 90, 92, 95, 100, 108] },
-  { label: "Direction requests", value: "318",    delta: "+24%", up: true,  data: [8, 10, 12, 11, 14, 15, 18, 20, 22, 24, 26, 28, 30, 32, 34] },
-  { label: "Calls from GMB",     value: "186",    delta: "−4%",  up: false, data: [18, 20, 19, 22, 24, 21, 20, 18, 17, 18, 16, 15, 17, 16, 15] },
-];
-
-const NO_SHOWS = [
-  { name: "Sarita Mahanti", count: 3, last: "14 min ago", initials: "SM", avBg: "#FFF8EC", avFg: "#7a5c2b" },
-  { name: "Laxmi Pradhan",  count: 2, last: "2 days ago", initials: "LP", avBg: "#F4E5FA", avFg: "#6b3aa1" },
-  { name: "Ravi Naik",      count: 2, last: "5 days ago", initials: "RN", avBg: "#FFE7EC", avFg: "#EE344E" },
-  { name: "Geeta Sahu",     count: 2, last: "8 days ago", initials: "GS", avBg: "#E6F4EC", avFg: "#3a8b5e" },
-  { name: "Ramesh Pati",    count: 1, last: "12 days ago", initials: "RP", avBg: "#E6F1FA", avFg: "#0E5087" },
-];
 
 function KpiAnal({ label, value, delta, deltaUp, ic }: { label: string; value: string; delta: string; deltaUp: boolean; ic: string }) {
   return (
@@ -95,13 +49,9 @@ function KpiAnal({ label, value, delta, deltaUp, ic }: { label: string; value: s
   );
 }
 
-function LineChart({ period }: { period: Period }) {
-  // Slice the dataset to match the selected period (we only have 30 days of demo
-  // data, so 90d/custom show everything; 7d shows the most recent points).
-  const data = useMemo(() => {
-    if (period === "7d") return BOOKING_DATA.slice(-4);
-    return BOOKING_DATA;
-  }, [period]);
+function LineChart({ data: rawData }: { data: BookingPoint[] }) {
+  // Defensive — if the data layer returned zero points, show at least one tick.
+  const data = useMemo(() => (rawData.length > 0 ? rawData : [{ d: "—", online: 0, walkin: 0, phone: 0 }]), [rawData]);
 
   const W = 880, H = 280;
   const P = { l: 40, r: 20, t: 20, b: 36 };
@@ -180,11 +130,16 @@ function Legend({ items }: { items: Array<{ label: string; color: string; checke
   );
 }
 
-function StackedBar() {
-  const max = 80;
+function StackedBar({ services }: { services: ServiceBar[] }) {
+  const max = Math.max(80, ...services.map((s) => s.conf + s.comp));
   return (
     <div className="flex flex-col gap-3">
-      {SERVICES.map((s) => {
+      {services.length === 0 && (
+        <div className="rounded-md border border-dashed border-border bg-surface-muted py-6 text-center text-[13px] text-muted">
+          No service activity for this window.
+        </div>
+      )}
+      {services.map((s) => {
         const total = s.conf + s.comp;
         return (
           <div key={s.name} className="grid grid-cols-[100px_1fr_56px] items-center gap-3 md:grid-cols-[120px_1fr_56px]">
@@ -201,14 +156,14 @@ function StackedBar() {
   );
 }
 
-function Donut() {
-  const total = LANG_DATA.reduce((s, d) => s + d.value, 0);
+function Donut({ slices }: { slices: LangSlice[] }) {
+  const total = slices.reduce((s, d) => s + d.value, 0) || 1;
   const r = 70, cx = 110, cy = 110, sw = 26;
   const C = 2 * Math.PI * r;
   let acc = -Math.PI / 2;
   return (
     <svg width="220" height="220" viewBox="0 0 220 220">
-      {LANG_DATA.map((d) => {
+      {slices.map((d) => {
         const frac = d.value / total;
         const len = C * frac;
         const seg = (
@@ -253,7 +208,7 @@ function MiniChart({ data, color }: { data: number[]; color: string }) {
   );
 }
 
-function MiniCard({ m }: { m: (typeof MICROSITE)[number] }) {
+function MiniCard({ m }: { m: MicrositeTile }) {
   return (
     <div className="rounded-[12px] border border-border bg-white p-4">
       <div className="flex items-baseline justify-between">
@@ -357,7 +312,7 @@ function FilterBar({
   );
 }
 
-function NoShowTable() {
+function NoShowTable({ rows }: { rows: NoShowRow[] }) {
   return (
     <div className="overflow-hidden rounded-[12px] border border-border bg-white">
       <div className="flex items-baseline justify-between border-b border-border px-5 py-4">
@@ -384,7 +339,14 @@ function NoShowTable() {
           </tr>
         </thead>
         <tbody>
-          {NO_SHOWS.map((p) => (
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={4} className="px-4 py-8 text-center text-[13px] text-muted">
+                No repeat no-shows in this window — nice work.
+              </td>
+            </tr>
+          )}
+          {rows.map((p) => (
             <tr key={p.name} className="border-t border-[#F4F5F7]">
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2.5">
@@ -419,12 +381,48 @@ function NoShowTable() {
   );
 }
 
-export function AdminAnalytics() {
-  const [period, setPeriod] = useState<Period>("30d");
-  const [doctor, setDoctor] = useState("all");
-  const [service, setService] = useState("all");
+export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const period = data.period;
 
-  const kpi = KPIS_BY_PERIOD[period];
+  // Doctor + service filters stay client-side for now — they're not yet wired
+  // through the data layer (would require re-fetching with the filter applied).
+  const doctor  = searchParams.get("doctor")  ?? "all";
+  const service = searchParams.get("service") ?? "all";
+
+  const setPeriod = (next: Period) => {
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    if (next === "custom") {
+      // Custom range not modeled yet — fall back to 30d for the data load.
+      params.set("period", "30d");
+    } else {
+      params.set("period", next);
+    }
+    router.push(`/admin/analytics?${params.toString()}`);
+  };
+  const setDoctor  = (next: string) => updateParam("doctor", next);
+  const setService = (next: string) => updateParam("service", next);
+  function updateParam(key: string, value: string) {
+    const params = new URLSearchParams(Array.from(searchParams.entries()));
+    if (!value || value === "all") params.delete(key);
+    else params.set(key, value);
+    router.push(`/admin/analytics?${params.toString()}`);
+  }
+
+  const k = data.kpis;
+  const kpi = {
+    newPatients: k.newPatients.value,
+    bookings:    k.bookings.value,
+    noShow:      k.noShowRate.value,
+    revenue:     k.revenue.value,
+    deltas: {
+      newPatients: k.newPatients.deltaLabel,
+      bookings:    k.bookings.deltaLabel,
+      noShow:      k.noShowRate.deltaLabel,
+      revenue:     k.revenue.deltaLabel,
+    },
+  };
   const filtersActive = doctor !== "all" || service !== "all";
 
   return (
@@ -476,7 +474,7 @@ export function AdminAnalytics() {
             ]}
           />
         </div>
-        <LineChart period={period} />
+        <LineChart data={data.bookingTimeline} />
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
@@ -493,16 +491,16 @@ export function AdminAnalytics() {
               ]}
             />
           </div>
-          <StackedBar />
+          <StackedBar services={data.topServices} />
         </div>
 
         <div className="rounded-[12px] border border-border bg-white p-5 md:p-6">
           <h3 className="text-[18px] font-semibold text-heading">Patients by language</h3>
           <p className="mb-4 mt-0.5 text-[12px] text-muted">Used at booking</p>
           <div className="flex flex-col items-center gap-6 md:flex-row">
-            <Donut />
+            <Donut slices={data.languageMix} />
             <div className="flex w-full flex-1 flex-col gap-3.5">
-              {LANG_DATA.map((d) => (
+              {data.languageMix.map((d) => (
                 <div key={d.label}>
                   <div className="mb-1 flex justify-between text-[13px] text-heading">
                     <span className="inline-flex items-center gap-2">
@@ -532,11 +530,11 @@ export function AdminAnalytics() {
           </span>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {MICROSITE.map((m) => <MiniCard key={m.label} m={m} />)}
+          {data.microsite.map((m) => <MiniCard key={m.label} m={m} />)}
         </div>
       </div>
 
-      <NoShowTable />
+      <NoShowTable rows={data.noShows} />
     </div>
   );
 }

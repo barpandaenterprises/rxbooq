@@ -1,15 +1,13 @@
-import {
-  formatLongDate,
-  formatSlotLabel,
-  type BookingDoctor,
-  type BookingService,
-} from "@/lib/booking-data";
+import { formatLongDate, formatSlotLabel } from "@/lib/booking-data";
+
+type PreviewService = { id: string; name: string };
+type PreviewDoctor  = { id: string; name: string };
 
 type Props = {
-  service: BookingService;
-  doctor: BookingDoctor | null;
-  date: string;
-  slot: string;
+  service: PreviewService;
+  doctor:  PreviewDoctor | null;
+  date:    string;
+  slot:    string;
   /** Render with the narrower bubble width used inside the phone frame. */
   inFrame?: boolean;
 };

@@ -60,6 +60,17 @@ supabase db reset                    # applies migrations + seed
 
 The CLI prints local `anon` and `service_role` keys; copy them into `.env.local`.
 
+### What the migrations create
+
+| File | Adds |
+|---|---|
+| `0001_initial_schema.sql` | Clinics, doctors, patients, services, scheduling, WhatsApp messaging, audit |
+| `0002_rls_policies.sql` | Tenant-isolation RLS + helper functions (JWT-claim based, replaced in 0006) |
+| `0003_schema_additions.sql` | Clinical records (visit notes, prescriptions + items, attachments, tooth treatments, medical history), `patient_users`, `otp_codes`, demographic columns on `patients` |
+| `0004_rls_additions.sql` | RLS for the new clinical-records tables + patient self-access policies + `current_patient_id()` helper |
+| `0005_storage.sql` | Two Storage buckets (`clinic-files` private, `public-assets` public) + path-scoped RLS on `storage.objects` |
+| `0006_simple_auth.sql` | Rewrites the RLS helpers as `security definer` DB lookups — no JWT custom-claims hook needed |
+
 ## 5. Generate types
 
 After the schema is applied:
@@ -69,6 +80,69 @@ npm run db:types
 ```
 
 This regenerates `src/lib/supabase/database.types.ts` from your live schema. Re-run it any time you change a migration.
+
+## 5a. Authentication setup
+
+The current "simple auth" path uses Supabase Auth's email provider with no custom JWT hook — the RLS helpers (`current_clinic_id`, `current_role`, `is_super_admin`, `current_patient_id`) look up identity directly from `clinic_users` / `patient_users` / `auth.users` via `security definer` functions.
+
+In the **Supabase Dashboard**:
+
+1. **Authentication → Providers → Email**: enable. Disable open signup (clinic staff are invite-only).
+2. **Authentication → URL Configuration**: site URL `http://localhost:3000` for dev (later `https://*.doctorkart.in`); redirect URLs include `/auth/callback`.
+3. **Authentication → Providers → Phone**: leave disabled — the patient OTP flow goes through a custom Interakt WhatsApp endpoint, not Supabase's native phone provider.
+4. **Authentication → Hooks**: **no hook needed**. Skip this section.
+
+### Bootstrap the first super-admin
+
+Create the user in **Authentication → Users → Add user** (email + password), then in the SQL editor:
+
+```sql
+update auth.users
+   set raw_app_meta_data = jsonb_set(coalesce(raw_app_meta_data, '{}'),
+                                     '{role}', '"superadmin"')
+ where email = 'you@doctorkart.in';
+```
+
+The `is_super_admin()` helper checks this flag, so the user now has cross-tenant access via RLS.
+
+### Patient WhatsApp OTP — extra setup
+
+The `/me/login` flow uses Interakt to send a 6-digit code and then issues a Supabase session via the admin magic-link API. Before this works in production:
+
+1. **Interakt template approved.** Register a template named `patient_otp_v1` (or whatever you set as `WA_OTP_TEMPLATE_NAME`) in the Interakt console with two body variables in this order: `{code}`, `{clinic_name}`. Get Meta approval.
+2. **Redirect allow-list.** In Supabase Dashboard → Authentication → URL Configuration, add `https://<yourdomain>/me/appointments` (and `http://localhost:3000/me/appointments` for dev) to **Redirect URLs**. Without this Supabase refuses the magic-link redirect.
+3. **`patients` row pre-exists.** The OTP send endpoint only sends codes to phones that already match a `patients` row at the clinic. Reception staff create the patient via `/admin/patients` first; the patient then uses the same phone to sign in.
+
+In mock mode (`MOCK_DATA=true`), the OTP send endpoint echoes the generated code back in the JSON response and the verify endpoint short-circuits — useful for end-to-end UI testing without Interakt configured.
+
+### Bootstrap a clinic staff user (for testing)
+
+1. **Authentication → Users → Add user** with the staff member's email.
+2. SQL editor — link them to a clinic:
+
+```sql
+insert into public.clinic_users (clinic_id, auth_user_id, role, display_name, email)
+values (
+  '11111111-1111-1111-1111-111111111111',     -- mahakur clinic
+  '<paste auth.users.id here>',
+  'clinic_admin',                              -- or 'doctor' / 'receptionist'
+  'Dr. P. Mahakur',
+  'pmahakur@example.com'
+);
+```
+
+That row is enough for the RLS helpers to scope the user to mahakur on every query.
+
+### Smoke-test RLS
+
+In the SQL editor, switch the role dropdown to **"authenticated"** and the impersonation to your new user, then:
+
+```sql
+select count(*) from public.appointments;    -- only mahakur rows
+select count(*) from public.patients;        -- only mahakur rows
+```
+
+Flip back to the service role to confirm the rest of the data exists but is hidden by RLS.
 
 ## 6. Run the dev server
 
@@ -133,5 +207,9 @@ You can now run `/screen-impl 02-booking-step1`, `/new-primitive StatusBadge`, `
 **`SUPABASE_SERVICE_ROLE_KEY is not set`** — `.env.local` is missing or wasn't loaded; restart the dev server after editing it.
 
 **`relation "public.clinics" does not exist`** — migrations weren't applied. Run `supabase db push` (cloud) or `supabase db reset` (local).
+
+**`permission denied for table storage.objects` when applying 0005** — `supabase db push` runs migrations as a role that may not own `storage.objects`. Apply `0005_storage.sql` from the Supabase Studio SQL editor instead (runs as `postgres`).
+
+**RLS returns zero rows for a staff user that should have access** — check that a `clinic_users` row exists with the right `auth_user_id`. The `current_clinic_id()` helper looks the user up by `auth.uid()`; if the row is missing, every tenant-scoped table will appear empty.
 
 **Tailwind utilities like `bg-cta` not recognized** — check that `src/styles/globals.css` is imported in `src/app/layout.tsx` and that `tailwind.config.ts`'s `content` glob matches `src/**/*.{ts,tsx}`.

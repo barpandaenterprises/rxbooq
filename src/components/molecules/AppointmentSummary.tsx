@@ -1,23 +1,20 @@
 import { LangPicker, type Locale } from "@/components/molecules/LangPicker";
-import {
-  formatLongDate,
-  formatSlotLabel,
-  type BookingDoctor,
-  type BookingService,
-} from "@/lib/booking-data";
+import { formatLongDate, formatSlotLabel } from "@/lib/booking-data";
+
+type SummaryService = { id: string; name: string; durationMinutes: number; feeLabel: string };
+type SummaryDoctor  = { id: string; name: string; credential: string };
 
 type Props = {
-  service: BookingService;
-  doctor: BookingDoctor | null;
-  date: string;
-  slot: string;
-  locale: Locale;
+  service: SummaryService;
+  doctor:  SummaryDoctor | null;
+  date:    string;
+  slot:    string;
+  locale:  Locale;
   onLocaleChange: (locale: Locale) => void;
-  compact?: boolean;
+  compact?:    boolean;
+  clinicName?: string;
+  clinicAddress?: string;
 };
-
-const CLINIC_NAME = "Mahakur Poly Dental";
-const CLINIC_ADDRESS = "Modipara Main Rd, Sambalpur";
 
 export function AppointmentSummary({
   service,
@@ -27,10 +24,12 @@ export function AppointmentSummary({
   locale,
   onLocaleChange,
   compact,
+  clinicName    = "Doctor Kart Clinic",
+  clinicAddress = "",
 }: Props) {
   const rows: Array<[string, string, string]> = [
-    ["Clinic", CLINIC_NAME, CLINIC_ADDRESS],
-    ["Service", service.name, `${service.duration} · ${service.fee}`],
+    ["Clinic", clinicName, clinicAddress],
+    ["Service", service.name, `${service.durationMinutes} min · ${service.feeLabel}`],
     [
       "Doctor",
       doctor?.name ?? "Any available doctor",
@@ -73,7 +72,7 @@ export function AppointmentSummary({
 
       <div className="flex items-center justify-between pt-3.5">
         <div className="text-[12px] font-medium text-[#9aa9b8]">To pay at clinic</div>
-        <div className="text-[18px] font-bold text-link-hover">{service.fee}</div>
+        <div className="text-[18px] font-bold text-link-hover">{service.feeLabel}</div>
       </div>
 
       <div className="mt-3.5 border-t border-border pt-3.5">

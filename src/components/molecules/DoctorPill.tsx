@@ -1,7 +1,5 @@
-import type { BookingDoctor } from "@/lib/booking-data";
-
 type Props = {
-  doctor: BookingDoctor;
+  doctor: { id: string; name: string; credential: string; initials: string };
   selected: boolean;
   onSelect: (id: string) => void;
 };

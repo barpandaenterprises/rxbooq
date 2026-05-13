@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AddDoctorDialog } from "@/components/molecules/AddDoctorDialog";
 import {
-  DOCTORS,
   SPECIALTIES,
   STATUS_META,
   summariseSchedule,
@@ -25,8 +24,8 @@ const STATUS_FILTERS: Array<{ value: DoctorStatus | "all"; label: string }> = [
   { value: "inactive", label: "Inactive" },
 ];
 
-export function AdminDoctors() {
-  const [doctors, setDoctors] = useState<Doctor[]>(DOCTORS);
+export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
+  const [doctors, setDoctors] = useState<Doctor[]>(initialDoctors);
   const [search, setSearch] = useState("");
   const [specialty, setSpecialty] = useState<Specialty | "all">("all");
   const [statusFilter, setStatusFilter] = useState<DoctorStatus | "all">("all");

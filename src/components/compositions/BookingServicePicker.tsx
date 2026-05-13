@@ -6,9 +6,15 @@ import { useState } from "react";
 import { BookingStepperHeader } from "@/components/molecules/BookingStepperHeader";
 import { BookingServiceTile } from "@/components/molecules/BookingServiceTile";
 import { DoctorPill } from "@/components/molecules/DoctorPill";
-import { BOOKING_SERVICES, BOOKING_DOCTORS } from "@/lib/booking-data";
+import type { PublicDoctor, PublicService } from "@/lib/data/public-booking";
 
-export function BookingServicePicker() {
+type Props = {
+  clinicName: string;
+  services:   PublicService[];
+  doctors:    PublicDoctor[];
+};
+
+export function BookingServicePicker({ clinicName, services, doctors }: Props) {
   const router = useRouter();
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
@@ -31,45 +37,59 @@ export function BookingServicePicker() {
           <BookingStepperHeader step={1} />
 
           <h2 className="mb-2 text-[22px] font-semibold leading-[28px] text-heading md:text-[28px] md:leading-[34px]">
-            Book your visit at Mahakur Poly Dental Clinic
+            Book your visit at {clinicName}
           </h2>
           <p className="mb-6 text-[14px] leading-[22px] text-muted md:mb-8 md:text-paragraph">
             Pick a service to see open slots.
           </p>
 
           <div className="mb-6 grid grid-cols-1 gap-3 md:mb-8 md:grid-cols-2 md:gap-4">
-            {BOOKING_SERVICES.map((s) => (
-              <BookingServiceTile
-                key={s.id}
-                service={s}
-                selected={s.id === selectedService}
-                onSelect={setSelectedService}
-              />
-            ))}
+            {services.length === 0 ? (
+              <div className="rounded-md border border-border bg-surface-muted px-4 py-8 text-center text-[13px] text-muted">
+                No services available right now. Please call the clinic.
+              </div>
+            ) : (
+              services.map((s) => (
+                <BookingServiceTile
+                  key={s.id}
+                  service={{
+                    id:          s.id,
+                    icon:        s.icon,
+                    name:        s.name,
+                    duration:    `${s.durationMinutes} min`,
+                    fee:         s.feeLabel,
+                    description: s.description,
+                  }}
+                  selected={s.id === selectedService}
+                  onSelect={setSelectedService}
+                />
+              ))
+            )}
           </div>
 
-          <div className="border-t border-border pt-5 md:pt-6">
-            <div className="mb-2.5 text-[12px] font-medium uppercase tracking-[0.06em] text-heading md:mb-3 md:text-[13px]">
-              Choose your doctor
+          {doctors.length > 1 && (
+            <div className="border-t border-border pt-5 md:pt-6">
+              <div className="mb-2.5 text-[12px] font-medium uppercase tracking-[0.06em] text-heading md:mb-3 md:text-[13px]">
+                Choose your doctor
+              </div>
+              <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:gap-2.5">
+                {doctors.map((d) => (
+                  <DoctorPill
+                    key={d.id}
+                    doctor={d}
+                    selected={d.id === selectedDoctor}
+                    onSelect={(id) =>
+                      setSelectedDoctor((curr) => (curr === id ? null : id))
+                    }
+                  />
+                ))}
+              </div>
+              <div className="mt-2.5 text-[12px] text-[#9aa9b8]">
+                <i className="fas fa-info-circle mr-1.5" />
+                Pick a doctor or leave blank to book with the next available.
+              </div>
             </div>
-            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:gap-2.5">
-              {BOOKING_DOCTORS.map((d) => (
-                <DoctorPill
-                  key={d.id}
-                  doctor={d}
-                  selected={d.id === selectedDoctor}
-                  onSelect={(id) =>
-                    setSelectedDoctor((curr) => (curr === id ? null : id))
-                  }
-                />
-              ))}
-            </div>
-            <div className="mt-2.5 text-[12px] text-[#9aa9b8]">
-              <i className="fas fa-info-circle mr-1.5" />
-              Doctor selector appears only at multi-doctor clinics. Single-doctor
-              tenants skip this row.
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Sticky footer (desktop) — below the card on mobile we render a fixed bottom bar instead */}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -18,12 +18,9 @@ import { AppointmentSummary } from "@/components/molecules/AppointmentSummary";
 import { WhatsAppOptInCard } from "@/components/molecules/WhatsAppOptInCard";
 import { OtpModal } from "@/components/molecules/OtpModal";
 import type { Locale } from "@/components/molecules/LangPicker";
-import {
-  formatLongDate,
-  formatSlotLabel,
-  type BookingDoctor,
-  type BookingService,
-} from "@/lib/booking-data";
+import { formatLongDate, formatSlotLabel } from "@/lib/booking-data";
+import { createPublicBookingAction } from "@/app/book/actions";
+import type { PublicDoctor, PublicService } from "@/lib/data/public-booking";
 
 const schema = z.object({
   fullName: z.string().min(2, "Please enter your full name."),
@@ -53,18 +50,23 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 type Props = {
-  service: BookingService;
-  doctor: BookingDoctor | null;
-  date: string;
-  slot: string;
+  service: PublicService;
+  doctor:  PublicDoctor | null;
+  date:    string;
+  slot:    string;
+  clinicName?:    string;
+  clinicAddress?: string;
 };
 
-export function BookingPatientForm({ service, doctor, date, slot }: Props) {
+export function BookingPatientForm({ service, doctor, date, slot, clinicName, clinicAddress }: Props) {
   const router = useRouter();
   const [locale, setLocale] = useState<Locale>("hi");
   const [otpOpen, setOtpOpen] = useState(false);
   const [pendingPhone, setPendingPhone] = useState<string>("");
   const [summaryOpen, setSummaryOpen] = useState(true);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [pendingValues, setPendingValues] = useState<FormValues | null>(null);
 
   const {
     register,
@@ -88,26 +90,54 @@ export function BookingPatientForm({ service, doctor, date, slot }: Props) {
   const verifyNumber = watch("verifyNumber");
   const consent = watch("consent");
 
-  const finalize = (mobile: string) => {
-    const params = new URLSearchParams({
-      service: service.id,
-      date,
-      slot,
-      ...(doctor ? { doctor: doctor.id } : {}),
-      mobile: mobile.replace(/\s+/g, ""),
-      locale,
+  const finalize = (values: FormValues, mobile: string) => {
+    if (!doctor) {
+      setSubmitError("Doctor missing. Please go back and pick a service again.");
+      return;
+    }
+    const phoneE164 = `+91${mobile.replace(/\D/g, "")}`;
+    const startsAtIso = `${date}T${slot}:00+05:30`;
+
+    setSubmitError(null);
+    startTransition(async () => {
+      const result = await createPublicBookingAction({
+        fullName:  values.fullName,
+        phoneE164,
+        language:  locale,
+        serviceId: service.id,
+        doctorId:  doctor.id,
+        startsAt:  startsAtIso,
+        notes:     values.reason || undefined,
+      });
+
+      if (!result.ok) {
+        setSubmitError(result.error);
+        return;
+      }
+
+      const params = new URLSearchParams({
+        service: service.id,
+        date,
+        slot,
+        ...(doctor ? { doctor: doctor.id } : {}),
+        mobile:  mobile.replace(/\s+/g, ""),
+        locale,
+        ...(result.mock ? {} : { ref: result.bookingRef, id: result.appointmentId }),
+      });
+      router.push(`/book/success?${params.toString()}`);
     });
-    router.push(`/book/success?${params.toString()}`);
   };
 
   const onSubmit = (values: FormValues) => {
+    if (isPending) return;
     const cleanedMobile = values.mobile.replace(/\s+/g, "");
     if (values.verifyNumber) {
       setPendingPhone(`+91 ${cleanedMobile}`);
+      setPendingValues(values);
       setOtpOpen(true);
       return;
     }
-    finalize(cleanedMobile);
+    finalize(values, cleanedMobile);
   };
 
   return (
@@ -134,7 +164,7 @@ export function BookingPatientForm({ service, doctor, date, slot }: Props) {
                       Your appointment
                     </span>
                     <span className="text-[12px] text-muted">
-                      {formatLongDate(date)} · {formatSlotLabel(slot)} · {service.fee}
+                      {formatLongDate(date)} · {formatSlotLabel(slot)} · {service.feeLabel}
                     </span>
                   </span>
                 </span>
@@ -152,6 +182,8 @@ export function BookingPatientForm({ service, doctor, date, slot }: Props) {
                     locale={locale}
                     onLocaleChange={setLocale}
                     compact
+                    clinicName={clinicName}
+                    clinicAddress={clinicAddress}
                   />
                 </div>
               )}
@@ -285,10 +317,19 @@ export function BookingPatientForm({ service, doctor, date, slot }: Props) {
                   slot={slot}
                   locale={locale}
                   onLocaleChange={setLocale}
+                  clinicName={clinicName}
+                  clinicAddress={clinicAddress}
                 />
               </div>
             </div>
           </div>
+
+          {submitError && (
+            <div role="alert" className="border-t border-border bg-red-50 px-5 py-3 text-[13px] text-danger md:px-12">
+              <i className="fas fa-exclamation-triangle mr-1.5" />
+              {submitError}
+            </div>
+          )}
 
           {/* Desktop sticky footer */}
           <div className="hidden items-center justify-between border-t border-border bg-surface-muted px-12 py-4 md:flex">
@@ -305,9 +346,21 @@ export function BookingPatientForm({ service, doctor, date, slot }: Props) {
               </span>
               <button
                 type="submit"
-                className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-6 py-3 text-[15px] font-medium text-cta-fg transition-colors hover:bg-[#d92843]"
+                disabled={isPending}
+                className={
+                  "inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-6 py-3 text-[15px] font-medium text-cta-fg transition-colors hover:bg-[#d92843] " +
+                  (isPending ? "cursor-not-allowed opacity-60 hover:bg-cta" : "")
+                }
               >
-                Confirm booking <i className="fas fa-arrow-right text-[11px]" />
+                {isPending ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin text-[11px]" /> Booking…
+                  </>
+                ) : (
+                  <>
+                    Confirm booking <i className="fas fa-arrow-right text-[11px]" />
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -336,7 +389,10 @@ export function BookingPatientForm({ service, doctor, date, slot }: Props) {
         onClose={() => setOtpOpen(false)}
         onVerified={() => {
           setOtpOpen(false);
-          finalize(pendingPhone.replace(/[^\d]/g, "").replace(/^91/, ""));
+          if (pendingValues) {
+            const cleanedMobile = pendingValues.mobile.replace(/\s+/g, "");
+            finalize(pendingValues, cleanedMobile);
+          }
         }}
       />
     </>

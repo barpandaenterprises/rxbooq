@@ -4,46 +4,12 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Popover from "@radix-ui/react-popover";
 import { useMemo, useState } from "react";
 import { Sparkline } from "@/components/atoms/Sparkline";
-
-type ApptStatus = "confirmed" | "booked" | "completed" | "noshow" | "cancelled";
-
-type ApptItem = {
-  time: string;
-  name: string;
-  phone: string;
-  service: string;
-  doctor: string;
-  status: ApptStatus;
-  isNow?: boolean;
-  isNew?: boolean;
-};
-
-const ALL_DOCTORS = ["Dr. Manoranjan", "Dr. Lipsa", "Dr. Asit"] as const;
-
-const TODAYS_APPTS: { hour: string; items: ApptItem[] }[] = [
-  { hour: "09:00", items: [
-    { time: "09:00", name: "Priya Sahu",     phone: "+91 93456 78901", service: "Root Canal · S2",    doctor: "Dr. Manoranjan", status: "completed" },
-    { time: "09:30", name: "Rajesh Mishra",  phone: "+91 94370 11111", service: "Consultation",       doctor: "Dr. Manoranjan", status: "completed" },
-  ]},
-  { hour: "10:00", items: [
-    { time: "10:00", name: "Anita Sahu",     phone: "+91 98765 12342", service: "Root Canal · S2",    doctor: "Dr. Manoranjan", status: "completed" },
-    { time: "10:30", name: "Laxmi Pradhan",  phone: "+91 90324 55512", service: "Cleaning",           doctor: "Dr. Lipsa",      status: "cancelled" },
-    { time: "11:00", name: "Sarita Mahanti", phone: "+91 99378 23445", service: "Whitening",          doctor: "Dr. Lipsa",      status: "noshow" },
-  ]},
-  { hour: "12:00", items: [
-    { time: "12:00", name: "Manoj Behera",   phone: "+91 95672 34111", service: "Implant consult",    doctor: "Dr. Manoranjan", status: "confirmed", isNow: true },
-    { time: "12:30", name: "Suresh Pati",    phone: "+91 89230 11445", service: "Braces adjust",      doctor: "Dr. Asit",       status: "confirmed" },
-  ]},
-  { hour: "14:00", items: [
-    { time: "14:00", name: "Karthik Rao",    phone: "+91 70084 91144", service: "Root Canal · S1",    doctor: "Dr. Manoranjan", status: "booked" },
-    { time: "14:30", name: "Pinky Sahu",     phone: "+91 87224 55501", service: "Pediatric checkup",  doctor: "Dr. Lipsa",      status: "booked" },
-    { time: "15:30", name: "Bidyut Panda",   phone: "+91 96543 22018", service: "Tooth extraction",   doctor: "Dr. Manoranjan", status: "booked", isNew: true },
-  ]},
-  { hour: "17:00", items: [
-    { time: "17:00", name: "Susmita Dash",   phone: "+91 99220 33015", service: "Cleaning",           doctor: "Dr. Lipsa",      status: "booked" },
-    { time: "17:30", name: "Anita Mohanti",  phone: "+91 98123 56611", service: "Follow-up",          doctor: "Dr. Manoranjan", status: "booked" },
-  ]},
-];
+import type {
+  AdminTodayData,
+  ApptItem,
+  ApptStatus,
+  WaActivity,
+} from "@/lib/data/admin-today";
 
 const STATUS_DOT: Record<ApptStatus, string> = {
   confirmed: "#0E5087",
@@ -199,17 +165,6 @@ function TimelineRow({ a }: { a: ApptItem }) {
   );
 }
 
-const WA_ACTIVITY = [
-  { name: "Bidyut Panda",   tpl: "booking_confirmation_v1", status: "replied",   ts: "just now",   replied: true,  highlight: true },
-  { name: "Anita Sahu",     tpl: "reminder_24h_v2",         status: "read",      ts: "2 min ago" },
-  { name: "Sarita Mahanti", tpl: "noshow_followup_v1",      status: "delivered", ts: "14 min ago" },
-  { name: "Karthik Rao",    tpl: "booking_confirmation_v1", status: "read",      ts: "18 min ago" },
-  { name: "Pinky Sahu",     tpl: "booking_confirmation_v1", status: "read",      ts: "22 min ago" },
-  { name: "Suresh Pati",    tpl: "reminder_24h_v2",         status: "replied",   ts: "31 min ago", replied: true },
-  { name: "Manoj Behera",   tpl: "reminder_24h_v2",         status: "delivered", ts: "46 min ago" },
-  { name: "Laxmi Pradhan",  tpl: "cancellation_ack_v1",     status: "read",      ts: "1 hr ago" },
-];
-
 function WaStatusIcon({ status }: { status: string }) {
   if (status === "delivered") return <i className="fas fa-check-double text-[11px] text-[#9aa9b8]" />;
   if (status === "read")      return <i className="fas fa-check-double text-[11px] text-[#34B7F1]" />;
@@ -217,7 +172,7 @@ function WaStatusIcon({ status }: { status: string }) {
   return null;
 }
 
-function WaFeed() {
+function WaFeed({ activity }: { activity: WaActivity[] }) {
   return (
     <div className="flex h-full flex-col rounded-[12px] border border-border bg-white">
       <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
@@ -231,55 +186,64 @@ function WaFeed() {
               className="h-1.5 w-1.5 rounded-pill bg-[#3a8b5e]"
               style={{ boxShadow: "0 0 0 3px rgba(58,139,94,0.20)" }}
             />
-            Live · 8 events in the last hour
+            Live · {activity.length} event{activity.length === 1 ? "" : "s"} in the last hour
           </div>
         </div>
         <a href="/admin/messages" className="text-[12px] text-link-hover no-underline">View all</a>
       </div>
       <div className="flex-1 overflow-hidden">
-        {WA_ACTIVITY.map((m, i) => (
-          <div
-            key={m.name}
-            className="flex items-start gap-3 px-5 py-3.5 last:border-b-0"
-            style={{
-              borderBottom: i < WA_ACTIVITY.length - 1 ? "1px solid #F4F5F7" : "none",
-              background: m.highlight ? "#FBFEF9" : "#fff",
-            }}
-          >
-            <span className="grid h-8 w-8 flex-none place-items-center rounded-pill bg-[#F4F5F7] text-[11px] font-semibold text-link-hover">
-              {m.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex justify-between gap-2 text-[13px] font-semibold text-heading">
-                <span>{m.name}</span>
-                <span className="text-[11px] font-normal text-[#9aa9b8]">{m.ts}</span>
-              </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
-                <code className="rounded-sm bg-[#F4F5F7] px-1.5 py-0.5 font-mono text-[10px] text-muted">
-                  {m.tpl}
-                </code>
-                <span className={"inline-flex items-center gap-1 " + (m.replied ? "text-[#3a8b5e]" : "text-muted")}>
-                  <WaStatusIcon status={m.status} />
-                  {m.status}
-                </span>
+        {activity.length === 0 ? (
+          <div className="grid place-items-center px-4 py-12 text-center text-[13px] text-muted">
+            <i className="fab fa-whatsapp text-[24px] text-[#cdd9e4]" />
+            <span className="mt-2">No recent WhatsApp activity.</span>
+          </div>
+        ) : (
+          activity.map((m, i) => (
+            <div
+              key={m.name + m.ts}
+              className="flex items-start gap-3 px-5 py-3.5 last:border-b-0"
+              style={{
+                borderBottom: i < activity.length - 1 ? "1px solid #F4F5F7" : "none",
+                background: m.highlight ? "#FBFEF9" : "#fff",
+              }}
+            >
+              <span className="grid h-8 w-8 flex-none place-items-center rounded-pill bg-[#F4F5F7] text-[11px] font-semibold text-link-hover">
+                {m.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex justify-between gap-2 text-[13px] font-semibold text-heading">
+                  <span>{m.name}</span>
+                  <span className="text-[11px] font-normal text-[#9aa9b8]">{m.ts}</span>
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+                  <code className="rounded-sm bg-[#F4F5F7] px-1.5 py-0.5 font-mono text-[10px] text-muted">
+                    {m.tpl}
+                  </code>
+                  <span className={"inline-flex items-center gap-1 " + (m.replied ? "text-[#3a8b5e]" : "text-muted")}>
+                    <WaStatusIcon status={m.status} />
+                    {m.status}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );
 }
 
 function DoctorFilter({
+  doctors,
   selected,
   onChange,
 }: {
+  doctors: string[];
   selected: Set<string>;
   onChange: (next: Set<string>) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const allSelected = selected.size === 0 || selected.size === ALL_DOCTORS.length;
+  const allSelected = selected.size === 0 || selected.size === doctors.length;
   const label = allSelected ? "All doctors" : `${selected.size} doctor${selected.size > 1 ? "s" : ""}`;
 
   const toggle = (d: string) => {
@@ -321,7 +285,7 @@ function DoctorFilter({
               </button>
             )}
           </div>
-          {ALL_DOCTORS.map((d) => {
+          {doctors.map((d) => {
             const checked = selected.size === 0 || selected.has(d);
             return (
               <label
@@ -344,30 +308,83 @@ function DoctorFilter({
   );
 }
 
-export function AdminToday() {
+export function AdminToday({ data }: { data: AdminTodayData }) {
+  const { appointments, doctors: allDoctors, waActivity, kpis } = data;
   const [doctors, setDoctors] = useState<Set<string>>(new Set()); // empty = all
 
   const filtered = useMemo(() => {
-    if (doctors.size === 0) return TODAYS_APPTS;
-    return TODAYS_APPTS.map((g) => ({
+    if (doctors.size === 0) return appointments;
+    return appointments.map((g) => ({
       ...g,
       items: g.items.filter((a) => doctors.has(a.doctor)),
     })).filter((g) => g.items.length > 0);
-  }, [doctors]);
+  }, [doctors, appointments]);
 
   const totalCount = useMemo(
     () => filtered.reduce((sum, g) => sum + g.items.length, 0),
     [filtered],
   );
 
+  const totalAll = useMemo(
+    () => appointments.reduce((sum, g) => sum + g.items.length, 0),
+    [appointments],
+  );
+
+  const confirmedCount = useMemo(
+    () =>
+      appointments.reduce(
+        (sum, g) => sum + g.items.filter((a) => a.status === "confirmed").length,
+        0,
+      ),
+    [appointments],
+  );
+
   return (
     <div className="px-5 pt-7 md:px-8 md:pt-8">
-      {/* KPI strip */}
+      {/* KPI strip — counts derived from data; trends remain placeholder until wired */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiTile label="Today's appointments" value="12" icon="fa-calendar-day"  delta="+2 vs avg"  deltaColor="#3a8b5e" sparkData={[8, 9, 7, 10, 11, 9, 12]} />
-        <KpiTile label="Confirmed (today)"    value="9"  icon="fa-check-circle"  delta="75%"        deltaColor="#0E5087" sparkData={[5, 6, 7, 8, 7, 8, 9]} />
-        <KpiTile label="No-shows · 7 days"    value="3"  icon="fa-user-clock"    delta="−40% vs prev" deltaColor="#3a8b5e" sparkData={[7, 6, 5, 5, 4, 4, 3]} sparkColor="#EE344E" />
-        <KpiTile label="New patients · week"  value="18" icon="fa-user-plus"     delta="+5 vs prev" deltaColor="#3a8b5e" sparkData={[2, 3, 4, 3, 4, 5, 6]} sparkColor="#0E5087" />
+        <KpiTile
+          label="Today's appointments"
+          value={String(totalAll)}
+          icon="fa-calendar-day"
+          delta="vs your average"
+          deltaColor="#3a8b5e"
+          sparkData={[0, 0, 0, 0, 0, 0, totalAll || 0]}
+        />
+        <KpiTile
+          label="Confirmed (today)"
+          value={String(confirmedCount)}
+          icon="fa-check-circle"
+          delta={totalAll ? `${Math.round((confirmedCount / totalAll) * 100)}%` : "0%"}
+          deltaColor="#0E5087"
+          sparkData={[0, 0, 0, 0, 0, 0, confirmedCount || 0]}
+        />
+        <KpiTile
+          label="No-shows · 7 days"
+          value={String(kpis.noShows7d)}
+          icon="fa-user-clock"
+          delta={
+            kpis.noShows7dDeltaPct === 0
+              ? "—"
+              : `${kpis.noShows7dDeltaPct > 0 ? "+" : "−"}${Math.abs(kpis.noShows7dDeltaPct)}% vs prev`
+          }
+          deltaColor={kpis.noShows7dDeltaPct > 0 ? "#EE344E" : "#3a8b5e"}
+          sparkData={kpis.noShows7dSpark}
+          sparkColor="#EE344E"
+        />
+        <KpiTile
+          label="New patients · week"
+          value={String(kpis.newPatientsWeek)}
+          icon="fa-user-plus"
+          delta={
+            kpis.newPatientsWeekDelta === 0
+              ? "—"
+              : `${kpis.newPatientsWeekDelta > 0 ? "+" : "−"}${Math.abs(kpis.newPatientsWeekDelta)} vs prev`
+          }
+          deltaColor={kpis.newPatientsWeekDelta < 0 ? "#EE344E" : "#3a8b5e"}
+          sparkData={kpis.newPatientsWeekSpark}
+          sparkColor="#0E5087"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[2fr_1fr]">
@@ -376,12 +393,12 @@ export function AdminToday() {
             <h3 className="text-[16px] font-semibold text-heading">Today&rsquo;s schedule</h3>
             <span className="text-[12px] text-[#9aa9b8]">
               · {totalCount} appointment{totalCount === 1 ? "" : "s"}
-              {doctors.size > 0 && doctors.size < ALL_DOCTORS.length && (
+              {doctors.size > 0 && doctors.size < allDoctors.length && (
                 <> (filtered)</>
               )}
             </span>
             <div className="ml-auto flex gap-2">
-              <DoctorFilter selected={doctors} onChange={setDoctors} />
+              <DoctorFilter doctors={allDoctors} selected={doctors} onChange={setDoctors} />
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -395,14 +412,20 @@ export function AdminToday() {
             {filtered.length === 0 ? (
               <div className="grid place-items-center px-4 py-16 text-center text-[13px] text-muted">
                 <i className="fas fa-filter text-[24px] text-[#cdd9e4]" />
-                <span className="mt-2">No appointments for the selected doctor{doctors.size > 1 ? "s" : ""}.</span>
-                <button
-                  type="button"
-                  onClick={() => setDoctors(new Set())}
-                  className="mt-2 text-link-hover underline"
-                >
-                  Show all doctors
-                </button>
+                <span className="mt-2">
+                  {appointments.length === 0
+                    ? "No appointments scheduled for today."
+                    : `No appointments for the selected doctor${doctors.size > 1 ? "s" : ""}.`}
+                </span>
+                {doctors.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDoctors(new Set())}
+                    className="mt-2 text-link-hover underline"
+                  >
+                    Show all doctors
+                  </button>
+                )}
               </div>
             ) : (
               filtered.map((group) => (
@@ -419,7 +442,7 @@ export function AdminToday() {
           </div>
         </div>
 
-        <WaFeed />
+        <WaFeed activity={waActivity} />
       </div>
     </div>
   );

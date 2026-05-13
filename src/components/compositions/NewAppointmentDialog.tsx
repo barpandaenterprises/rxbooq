@@ -1,33 +1,58 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { useMemo, useState } from "react";
-import {
-  BOOKING_DOCTORS,
-  BOOKING_SERVICES,
-  formatLongDate,
-  formatSlotLabel,
-  toLocalIso,
-} from "@/lib/booking-data";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { formatLongDate, formatSlotLabel, toLocalIso } from "@/lib/booking-data";
+import { createAppointmentAction } from "@/app/(clinic-app)/admin/appointments/actions";
+import type {
+  BookingLookups,
+  BookingLookupRecentPatient,
+} from "@/lib/data/booking-lookups";
 
-type RecentPatient = {
-  id: string;
-  name: string;
-  initials: string;
-  phone: string;
-  lang: "EN" | "HI" | "OR";
-  bg: string;
-  fg: string;
-};
+type RecentPatient = BookingLookupRecentPatient;
 
-const RECENT_PATIENTS: RecentPatient[] = [
-  { id: "P-1284", name: "Anita Sahu",      initials: "AS", phone: "98765 12342", lang: "EN", bg: "#FFE7EC", fg: "#EE344E" },
-  { id: "P-1283", name: "Bidyut Panda",    initials: "BP", phone: "96543 22018", lang: "OR", bg: "#E6F1FA", fg: "#0E5087" },
-  { id: "P-1278", name: "Manoj Behera",    initials: "MB", phone: "95672 34111", lang: "OR", bg: "#E6F4EC", fg: "#3a8b5e" },
-  { id: "P-1273", name: "Karthik Rao",     initials: "KR", phone: "70084 91144", lang: "EN", bg: "#FFE7EC", fg: "#EE344E" },
-  { id: "P-1271", name: "Pinky Sahu",      initials: "PS", phone: "87224 55501", lang: "OR", bg: "#E6F1FA", fg: "#0E5087" },
-  { id: "P-1262", name: "Laxmi Pradhan",   initials: "LP", phone: "90324 55512", lang: "HI", bg: "#F4E5FA", fg: "#6b3aa1" },
-];
+// ---------- Form schema ----------------------------------------------------
+
+const apptFormSchema = z
+  .object({
+    selectedPatientId: z.string().nullable(),
+    phone:             z.string(),
+    name:              z.string(),
+    serviceId:         z.string().min(1, "Pick a service"),
+    doctorId:          z.string().min(1, "Pick a doctor"),
+    dateIso:           z.string().min(1),
+    slot:              z.string().nullable(),
+    sendWhatsApp:      z.boolean(),
+    notes:             z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.selectedPatientId) {
+      const digits = v.phone.replace(/\D/g, "");
+      if (digits.length !== 10) {
+        ctx.addIssue({
+          code:    "custom",
+          message: "Enter a 10-digit phone number",
+          path:    ["phone"],
+        });
+      }
+      if (v.name.trim().length < 2) {
+        ctx.addIssue({
+          code:    "custom",
+          message: "Enter the patient's name",
+          path:    ["name"],
+        });
+      }
+    }
+    if (!v.slot) {
+      ctx.addIssue({ code: "custom", message: "Pick a time slot", path: ["slot"] });
+    }
+  });
+
+type ApptFormValues = z.infer<typeof apptFormSchema>;
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MONTH_LABELS = [
@@ -79,32 +104,72 @@ function digitsOnly(s: string) {
 
 type Props = {
   trigger: React.ReactNode;
+  lookups: BookingLookups;
 };
 
-export function NewAppointmentDialog({ trigger }: Props) {
+export function NewAppointmentDialog({ trigger, lookups }: Props) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+
+  const services       = lookups.services;
+  const doctors        = lookups.doctors;
+  const recentPatients = lookups.recentPatients;
+
   const dates = useMemo(() => buildDates(7), []);
   const slots = useMemo(buildSlots, []);
   const firstOpenIso = dates.find((d) => !d.closed)?.iso ?? dates[0]!.iso;
 
-  const [open, setOpen] = useState(false);
-  const [phone, setPhone] = useState("");
-  const [name, setName] = useState("");
-  const [selected, setSelected] = useState<RecentPatient | null>(null);
-  const [serviceId, setServiceId] = useState(BOOKING_SERVICES[0]!.id);
-  const [doctorId, setDoctorId] = useState(BOOKING_DOCTORS[0]!.id);
-  const [dateIso, setDateIso] = useState(firstOpenIso);
-  const [slot, setSlot] = useState<string | null>(null);
-  const [sendWhatsApp, setSendWhatsApp] = useState(true);
-  const [notes, setNotes] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
+  const defaultValues: ApptFormValues = useMemo(() => ({
+    selectedPatientId: null,
+    phone:             "",
+    name:              "",
+    serviceId:         services[0]?.id ?? "",
+    doctorId:          doctors[0]?.id ?? "",
+    dateIso:           firstOpenIso,
+    slot:              null,
+    sendWhatsApp:      true,
+    notes:             "",
+  }), [services, doctors, firstOpenIso]);
+
+  const {
+    register,
+    watch,
+    setValue,
+    handleSubmit,
+    reset: resetForm,
+    formState: { errors },
+  } = useForm<ApptFormValues>({
+    resolver:      zodResolver(apptFormSchema),
+    defaultValues,
+    mode:          "onSubmit",
+  });
+
+  // Live derived state via watch
+  const phone             = watch("phone");
+  const name              = watch("name");
+  const selectedPatientId = watch("selectedPatientId");
+  const serviceId         = watch("serviceId");
+  const doctorId          = watch("doctorId");
+  const dateIso           = watch("dateIso");
+  const slot              = watch("slot");
+  const sendWhatsApp      = watch("sendWhatsApp");
+  const notes             = watch("notes");
 
   const phoneDigits = digitsOnly(phone);
   const matches = useMemo(() => {
     if (phoneDigits.length < 2) return [];
-    return RECENT_PATIENTS.filter((p) =>
+    return recentPatients.filter((p) =>
       digitsOnly(p.phone).includes(phoneDigits),
     );
-  }, [phoneDigits]);
+  }, [phoneDigits, recentPatients]);
+
+  const selected: RecentPatient | null = useMemo(
+    () => recentPatients.find((p) => p.id === selectedPatientId) ?? null,
+    [recentPatients, selectedPatientId],
+  );
 
   const isExistingPatient = selected !== null;
   const isNewPatientReady = !isExistingPatient && phoneDigits.length === 10 && name.trim().length >= 2;
@@ -112,38 +177,60 @@ export function NewAppointmentDialog({ trigger }: Props) {
   const canSubmit = patientReady && Boolean(slot);
 
   const reset = () => {
-    setPhone("");
-    setName("");
-    setSelected(null);
-    setServiceId(BOOKING_SERVICES[0]!.id);
-    setDoctorId(BOOKING_DOCTORS[0]!.id);
-    setDateIso(firstOpenIso);
-    setSlot(null);
-    setSendWhatsApp(true);
-    setNotes("");
+    resetForm(defaultValues);
     setConfirmed(false);
+    setSubmitError(null);
   };
 
   const handleSelectPatient = (p: RecentPatient) => {
-    setSelected(p);
-    setPhone(p.phone);
-    setName(p.name);
+    setValue("selectedPatientId", p.id, { shouldValidate: false });
+    setValue("phone", p.phone,           { shouldValidate: false });
+    setValue("name",  p.name,            { shouldValidate: false });
   };
 
   const handleClearPatient = () => {
-    setSelected(null);
-    setPhone("");
-    setName("");
+    setValue("selectedPatientId", null, { shouldValidate: false });
+    setValue("phone", "",               { shouldValidate: false });
+    setValue("name",  "",               { shouldValidate: false });
   };
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    // Production: write booking + trigger Interakt template.
-    setConfirmed(true);
+  const onSubmit = (values: ApptFormValues) => {
+    if (isPending) return;
+    setSubmitError(null);
+
+    const startsAtIso = `${values.dateIso}T${values.slot ?? "00:00"}:00+05:30`;
+    const e164        = `+91${digitsOnly(values.phone)}`;
+
+    startTransition(async () => {
+      const result = await createAppointmentAction({
+        ...(values.selectedPatientId
+          ? { patientId: values.selectedPatientId }
+          : {
+              patient: {
+                fullName:  values.name.trim(),
+                phoneE164: e164,
+                language:  "en",
+              },
+            }),
+        doctorId:     values.doctorId,
+        serviceId:    values.serviceId,
+        startsAt:     startsAtIso,
+        notes:        values.notes.trim() || undefined,
+        sendWhatsApp: values.sendWhatsApp,
+      });
+
+      if (!result.ok) {
+        setSubmitError(result.error);
+        return;
+      }
+
+      if (!result.mock) router.refresh();
+      setConfirmed(true);
+    });
   };
 
-  const service = BOOKING_SERVICES.find((s) => s.id === serviceId)!;
-  const doctor = BOOKING_DOCTORS.find((d) => d.id === doctorId)!;
+  const service = services.find((s) => s.id === serviceId) ?? services[0];
+  const doctor  = doctors.find((d) => d.id === doctorId)   ?? doctors[0];
   const patientName = selected ? selected.name : name.trim() || "this patient";
 
   return (
@@ -166,18 +253,18 @@ export function NewAppointmentDialog({ trigger }: Props) {
               patientName={patientName}
               dateIso={dateIso}
               slotShort={slot!}
-              serviceName={service.name}
-              doctorName={doctor.name}
+              serviceName={service?.name ?? "—"}
+              doctorName={doctor?.name ?? "—"}
               sendWhatsApp={sendWhatsApp}
               onClose={() => setOpen(false)}
               onAnother={() => {
                 setConfirmed(false);
-                setSlot(null);
-                setNotes("");
+                setValue("slot",  null, { shouldValidate: false });
+                setValue("notes", "",   { shouldValidate: false });
               }}
             />
           ) : (
-            <>
+            <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col" noValidate>
               {/* Header */}
               <div className="flex items-start justify-between gap-3 border-b border-border bg-white px-5 py-4">
                 <div>
@@ -230,8 +317,7 @@ export function NewAppointmentDialog({ trigger }: Props) {
                           type="tel"
                           inputMode="numeric"
                           autoFocus
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
+                          {...register("phone")}
                           placeholder="Type or paste caller number"
                           className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
                         />
@@ -244,7 +330,7 @@ export function NewAppointmentDialog({ trigger }: Props) {
                             Recent callers
                           </div>
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {RECENT_PATIENTS.slice(0, 4).map((p) => (
+                            {recentPatients.slice(0, 4).map((p) => (
                               <button
                                 key={p.id}
                                 type="button"
@@ -302,11 +388,16 @@ export function NewAppointmentDialog({ trigger }: Props) {
                           </div>
                           <input
                             type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            {...register("name")}
                             placeholder="Patient name (as on records)"
                             className="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-[14px] text-heading outline-none focus:border-link-hover"
                           />
+                          {errors.name?.message && (
+                            <div className="mt-1 text-[11px] text-danger">
+                              <i className="fas fa-exclamation-circle mr-1" />
+                              {errors.name.message}
+                            </div>
+                          )}
                           {phoneDigits.length > 0 && phoneDigits.length < 10 && (
                             <div className="mt-1.5 text-[11px] text-cta">
                               <i className="fas fa-exclamation-circle mr-1" />
@@ -323,24 +414,22 @@ export function NewAppointmentDialog({ trigger }: Props) {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Section label="Service" required>
                     <select
-                      value={serviceId}
-                      onChange={(e) => setServiceId(e.target.value)}
+                      {...register("serviceId")}
                       className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
                     >
-                      {BOOKING_SERVICES.map((s) => (
+                      {services.map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} · {s.duration} · {s.fee}
+                          {s.name} · {s.durationMinutes} min · {s.feeLabel}
                         </option>
                       ))}
                     </select>
                   </Section>
                   <Section label="Doctor">
                     <select
-                      value={doctorId}
-                      onChange={(e) => setDoctorId(e.target.value)}
+                      {...register("doctorId")}
                       className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
                     >
-                      {BOOKING_DOCTORS.map((d) => (
+                      {doctors.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.name} — {d.credential}
                         </option>
@@ -360,8 +449,8 @@ export function NewAppointmentDialog({ trigger }: Props) {
                           type="button"
                           disabled={d.closed}
                           onClick={() => {
-                            setDateIso(d.iso);
-                            setSlot(null);
+                            setValue("dateIso", d.iso, { shouldValidate: false });
+                            setValue("slot",    null,  { shouldValidate: false });
                           }}
                           className={
                             "relative flex w-[60px] flex-none flex-col items-center rounded-md border-[1.5px] py-1.5 transition-colors " +
@@ -406,7 +495,7 @@ export function NewAppointmentDialog({ trigger }: Props) {
                           key={s.short}
                           type="button"
                           disabled={isBooked}
-                          onClick={() => setSlot(s.short)}
+                          onClick={() => setValue("slot", s.short, { shouldValidate: true })}
                           className={
                             "rounded-md border-[1.5px] py-1.5 text-[12px] font-medium transition-colors " +
                             (isBooked
@@ -428,8 +517,7 @@ export function NewAppointmentDialog({ trigger }: Props) {
                   <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border bg-white p-3">
                     <input
                       type="checkbox"
-                      checked={sendWhatsApp}
-                      onChange={(e) => setSendWhatsApp(e.target.checked)}
+                      {...register("sendWhatsApp")}
                       className="mt-0.5 h-4 w-4 cursor-pointer accent-[#25D366]"
                     />
                     <span className="text-[13px] leading-5 text-heading">
@@ -445,8 +533,7 @@ export function NewAppointmentDialog({ trigger }: Props) {
                 {/* Notes */}
                 <Section label="Note for the doctor (optional)">
                   <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                    {...register("notes")}
                     rows={2}
                     placeholder="e.g. Patient is anxious about RCT — handle gently."
                     className="w-full resize-y rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading outline-none focus:border-link-hover"
@@ -468,27 +555,41 @@ export function NewAppointmentDialog({ trigger }: Props) {
                       Pick or create a patient first
                     </span>
                   )}
-                  {patientReady && !slot && (
+                  {patientReady && !slot && !submitError && (
                     <span className="hidden text-[12px] text-[#9aa9b8] sm:inline">
                       <i className="fas fa-info-circle mr-1" />
                       Pick a time slot
                     </span>
                   )}
+                  {submitError && (
+                    <span role="alert" className="text-[12px] text-danger">
+                      <i className="fas fa-exclamation-triangle mr-1" />
+                      {submitError}
+                    </span>
+                  )}
                   <button
-                    type="button"
-                    onClick={handleSubmit}
-                    disabled={!canSubmit}
+                    type="submit"
+                    disabled={isPending}
                     className={
                       "inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-5 py-2 text-[14px] font-semibold text-cta-fg transition-colors hover:bg-[#d92843] " +
-                      (!canSubmit ? "cursor-not-allowed opacity-50 hover:bg-cta" : "")
+                      (isPending ? "cursor-not-allowed opacity-50 hover:bg-cta" : "")
                     }
                   >
-                    <i className="fas fa-calendar-check text-[12px]" />
-                    Confirm booking
+                    {isPending ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin text-[12px]" />
+                        Booking…
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-calendar-check text-[12px]" />
+                        Confirm booking
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
-            </>
+            </form>
           )}
         </Dialog.Content>
       </Dialog.Portal>

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { NewAppointmentDialog } from "@/components/compositions/NewAppointmentDialog";
+import { getSignedInClinicUser, type SignedInClinicUser } from "@/lib/auth/current-user";
+import { getBookingLookups, type BookingLookups } from "@/lib/data/booking-lookups";
 
 export type AdminNavKey =
   | "Today"
@@ -25,7 +27,7 @@ const NAV_ITEMS: Array<{
   { ic: "fa-comments", label: "Messages", href: "/admin/messages", badge: "3", badgeCoral: true },
   { ic: "fa-chart-line", label: "Analytics", href: "/admin/analytics" },
   { ic: "fa-file-alt", label: "Content", href: "#" },
-  { ic: "fa-cog", label: "Settings", href: "#" },
+  { ic: "fa-cog", label: "Settings", href: "/admin/settings/team" },
 ];
 
 const MOBILE_TABS: Array<{ ic: string; label: string; href?: string; key: AdminNavKey | "More"; badge?: number }> = [
@@ -36,7 +38,37 @@ const MOBILE_TABS: Array<{ ic: string; label: string; href?: string; key: AdminN
   { ic: "fa-ellipsis-h", label: "More", key: "More" },
 ];
 
-function ClinicSidebar({ active }: { active: AdminNavKey }) {
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function roleLabel(role: string | null): string {
+  switch (role) {
+    case "clinic_admin": return "Admin";
+    case "doctor":       return "Doctor";
+    case "receptionist": return "Receptionist";
+    case "superadmin":   return "Super-admin";
+    default:             return "Staff";
+  }
+}
+
+function ClinicSidebar({
+  active,
+  user,
+}: {
+  active: AdminNavKey;
+  user: SignedInClinicUser | null;
+}) {
+  const displayName = user?.displayName ?? "Signed in";
+  const initials    = user?.displayName ? initialsOf(user.displayName) : "?";
+  const role        = roleLabel(user?.role ?? null);
+
   return (
     <aside className="hidden w-60 flex-none flex-col bg-[#0a2742] p-3 text-[#c9d4df] md:flex">
       <div className="mb-3.5 flex items-center gap-2.5 border-b border-white/10 px-2 pb-4 pt-1">
@@ -87,19 +119,37 @@ function ClinicSidebar({ active }: { active: AdminNavKey }) {
 
       <div className="mt-3.5 flex items-center gap-2.5 border-t border-white/10 px-2 pt-3.5">
         <span className="grid h-8 w-8 flex-none place-items-center rounded-pill bg-[#FFE7EC] text-[11px] font-semibold text-cta">
-          RR
+          {initials}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-medium text-white">Reema R.</div>
-          <div className="text-[11px] text-[#8aa0b6]">Receptionist</div>
+          <div className="truncate text-[13px] font-medium text-white">{displayName}</div>
+          <div className="text-[11px] text-[#8aa0b6]">{role}</div>
         </div>
-        <i className="fas fa-ellipsis-h text-[12px] text-[#8aa0b6]" />
+        <Link
+          href="/logout"
+          prefetch={false}
+          aria-label="Sign out"
+          title="Sign out"
+          className="grid h-7 w-7 place-items-center rounded-md text-[#8aa0b6] hover:bg-white/5 hover:text-white"
+        >
+          <i className="fas fa-sign-out-alt text-[13px]" />
+        </Link>
       </div>
     </aside>
   );
 }
 
-function ClinicTopBar({ subtitle, dayLabel, dateLabel }: { subtitle?: string; dayLabel?: string; dateLabel?: string }) {
+function ClinicTopBar({
+  subtitle,
+  dayLabel,
+  dateLabel,
+  lookups,
+}: {
+  subtitle?: string;
+  dayLabel?: string;
+  dateLabel?: string;
+  lookups: BookingLookups;
+}) {
   return (
     <header className="flex items-center gap-6 border-b border-border bg-white px-5 py-3.5 md:px-8">
       {/* Mobile menu trigger */}
@@ -134,6 +184,7 @@ function ClinicTopBar({ subtitle, dayLabel, dateLabel }: { subtitle?: string; da
           <span className="absolute right-2 top-1.5 h-2 w-2 rounded-pill border-[1.5px] border-white bg-cta" />
         </button>
         <NewAppointmentDialog
+          lookups={lookups}
           trigger={
             <button
               type="button"
@@ -144,6 +195,7 @@ function ClinicTopBar({ subtitle, dayLabel, dateLabel }: { subtitle?: string; da
           }
         />
         <NewAppointmentDialog
+          lookups={lookups}
           trigger={
             <button
               type="button"
@@ -197,12 +249,16 @@ type Props = {
   dateLabel?: string;
 };
 
-export function ClinicAppLayout({ active, children, topBarSubtitle, dayLabel, dateLabel }: Props) {
+export async function ClinicAppLayout({ active, children, topBarSubtitle, dayLabel, dateLabel }: Props) {
+  const [user, lookups] = await Promise.all([
+    getSignedInClinicUser(),
+    getBookingLookups(),
+  ]);
   return (
     <div className="flex min-h-screen items-stretch bg-[#F4F5F7]">
-      <ClinicSidebar active={active} />
+      <ClinicSidebar active={active} user={user} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <ClinicTopBar subtitle={topBarSubtitle} dayLabel={dayLabel} dateLabel={dateLabel} />
+        <ClinicTopBar subtitle={topBarSubtitle} dayLabel={dayLabel} dateLabel={dateLabel} lookups={lookups} />
         <main className="flex-1 pb-24 md:pb-10">{children}</main>
       </div>
       <ClinicMobileTabBar active={active} />

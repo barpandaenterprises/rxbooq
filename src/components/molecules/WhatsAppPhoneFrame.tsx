@@ -2,13 +2,15 @@ import {
   WhatsAppMessagePreview,
   WhatsAppQuickReplies,
 } from "@/components/molecules/WhatsAppMessagePreview";
-import type { BookingDoctor, BookingService } from "@/lib/booking-data";
+
+type FrameService = { id: string; name: string };
+type FrameDoctor  = { id: string; name: string };
 
 type Props = {
-  service: BookingService;
-  doctor: BookingDoctor | null;
-  date: string;
-  slot: string;
+  service: FrameService;
+  doctor:  FrameDoctor | null;
+  date:    string;
+  slot:    string;
 };
 
 const CHAT_BG_PATTERN =
