@@ -39,8 +39,7 @@ const uploadAttachmentSchema = z.object({
 export type UploadAttachmentInput = z.infer<typeof uploadAttachmentSchema>;
 
 export type UploadAttachmentResult =
-  | { ok: true;  mock: true }
-  | { ok: true;  mock: false; attachmentId: string; storagePath: string }
+  | { ok: true;  attachmentId: string; storagePath: string }
   | { ok: false; error: string };
 
 export async function uploadAttachmentAction(
@@ -51,8 +50,6 @@ export async function uploadAttachmentAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
   const input = parsed.data;
-
-  if (useMockData()) return { ok: true, mock: true };
 
   const supabase = await serverClient();
   const {
@@ -108,8 +105,7 @@ export async function uploadAttachmentAction(
   revalidatePath(`/admin/patients/${input.patientId}`);
 
   return {
-    ok:          true,
-    mock:        false,
+    ok:           true,
     attachmentId: row.id,
     storagePath:  row.storage_path,
   };
@@ -151,8 +147,6 @@ export async function getAttachmentSignedUrlAction(
 export async function deleteAttachmentAction(
   attachmentId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (useMockData()) return { ok: true };
-
   const supabase = await serverClient();
   const { data: row } = await supabase
     .from("visit_attachments")

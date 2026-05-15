@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { serverClient } from "@/lib/supabase/server";
-import { useMockData } from "@/lib/feature-flags";
 import { deleteClinicFile, uploadClinicFile } from "@/lib/supabase/storage";
 
 const itemSchema = z.object({
@@ -32,8 +31,7 @@ const createPrescriptionSchema = z.object({
 export type CreatePrescriptionInput = z.infer<typeof createPrescriptionSchema>;
 
 export type CreatePrescriptionResult =
-  | { ok: true;  mock: true }
-  | { ok: true;  mock: false; prescriptionId: string }
+  | { ok: true;  prescriptionId: string }
   | { ok: false; error: string };
 
 export async function createPrescriptionAction(
@@ -44,8 +42,6 @@ export async function createPrescriptionAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
   const input = parsed.data;
-
-  if (useMockData()) return { ok: true, mock: true };
 
   const supabase = await serverClient();
   const {
@@ -141,5 +137,5 @@ export async function createPrescriptionAction(
 
   revalidatePath(`/admin/patients/${input.patientId}`);
 
-  return { ok: true, mock: false, prescriptionId: rx.id };
+  return { ok: true, prescriptionId: rx.id };
 }

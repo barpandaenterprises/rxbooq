@@ -312,7 +312,7 @@ export function RxEntryDialog({
       }
 
       const localRx: Prescription = {
-        id:             result.mock ? newId("Rx") : result.prescriptionId,
+        id:             result.prescriptionId,
         appointmentId:  null,
         patientId,
         doctorId:       values.doctorId,
@@ -329,8 +329,8 @@ export function RxEntryDialog({
       onSaved(localRx);
       setStep("saved");
 
-      // Live mode: revalidate the chart so the new Rx appears on next nav.
-      if (!result.mock) router.refresh();
+      // Pull the freshly inserted Rx into the chart on the next render.
+      router.refresh();
     });
   };
 

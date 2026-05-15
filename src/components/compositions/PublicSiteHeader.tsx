@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { LanguageSwitcher } from "@/components/molecules/LanguageSwitcher";
 import { MobileNavDrawer } from "@/components/molecules/MobileNavDrawer";
-import { getLocale } from "@/lib/locale-server";
 
 type NavItem = { label: string; href: string; active?: boolean };
 
@@ -13,9 +11,13 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Contact", href: "/#contact" },
 ];
 
-export async function PublicSiteHeader() {
-  const locale = await getLocale();
+// LanguageSwitcher was removed: the marketing site copy is English-only for v1.
+// Patients still pick their preferred language for WhatsApp comms in the booking
+// form — see BookingPatientForm + patients.language. To bring back a real
+// language switcher, wire next-intl (already installed) and ship translations
+// per the "Multilingual UI" decision in docs/client-questions/operating-model.md.
 
+export async function PublicSiteHeader() {
   return (
     <nav className="sticky top-0 z-30 flex h-16 items-center border-b border-border bg-white md:h-[72px]">
       <div className="mx-auto flex w-full max-w-[1200px] items-center gap-3 px-4 md:gap-8 md:px-8">
@@ -56,7 +58,6 @@ export async function PublicSiteHeader() {
 
         {/* Desktop right cluster */}
         <div className="ml-auto hidden items-center gap-4 md:flex">
-          <LanguageSwitcher current={locale} />
           <Link
             href="/book"
             className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-cta px-[18px] py-2 text-[14px] font-medium text-cta-fg no-underline transition-colors hover:bg-[#d92843]"
@@ -66,10 +67,9 @@ export async function PublicSiteHeader() {
           </Link>
         </div>
 
-        {/* Mobile right cluster: language pill (compact) + hamburger */}
+        {/* Mobile right cluster: hamburger */}
         <div className="ml-auto flex items-center gap-2 md:hidden">
-          <LanguageSwitcher current={locale} />
-          <MobileNavDrawer locale={locale} />
+          <MobileNavDrawer />
         </div>
       </div>
     </nav>

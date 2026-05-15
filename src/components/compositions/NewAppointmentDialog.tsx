@@ -3,11 +3,14 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { formatLongDate, formatSlotLabel, toLocalIso } from "@/lib/booking-data";
-import { createAppointmentAction } from "@/app/(clinic-app)/admin/appointments/actions";
+import {
+  createAppointmentAction,
+  getBookedSlotsAction,
+} from "@/app/(clinic-app)/admin/appointments/actions";
 import type {
   BookingLookups,
   BookingLookupRecentPatient,
@@ -60,7 +63,8 @@ const MONTH_LABELS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ] as const;
 
-const BOOKED_SLOTS = new Set(["10:30", "11:00", "13:00", "13:30", "15:30"]);
+// Booked slots are loaded dynamically per doctor + date via getBookedSlotsAction.
+// Lunch break is currently a static window — to be replaced with availability_overrides later.
 const LUNCH_SLOTS = new Set(["14:00", "14:30"]);
 
 type DemoDate = { iso: string; day: number; month: string; weekday: string; closed: boolean; isToday: boolean };
@@ -113,6 +117,8 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [bookedSlots, setBookedSlots] = useState<Set<string>>(new Set());
+  const [slotsLoading, setSlotsLoading] = useState(false);
 
   const services       = lookups.services;
   const doctors        = lookups.doctors;
@@ -176,6 +182,25 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
   const patientReady = isExistingPatient || isNewPatientReady;
   const canSubmit = patientReady && Boolean(slot);
 
+  // Refresh the taken-slots set whenever doctor or date changes (or the
+  // dialog opens with a default doctor+date). Skipped when no doctor is
+  // selected — the picker stays open in that edge case.
+  useEffect(() => {
+    if (!open || !doctorId || !dateIso) return;
+    let cancelled = false;
+    setSlotsLoading(true);
+    getBookedSlotsAction({ doctorId, dateIso })
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok) setBookedSlots(new Set(result.slots));
+        else           setBookedSlots(new Set());
+      })
+      .finally(() => {
+        if (!cancelled) setSlotsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [open, doctorId, dateIso]);
+
   const reset = () => {
     resetForm(defaultValues);
     setConfirmed(false);
@@ -224,7 +249,7 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
         return;
       }
 
-      if (!result.mock) router.refresh();
+      router.refresh();
       setConfirmed(true);
     });
   };
@@ -323,11 +348,18 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                         />
                       </div>
 
-                      {/* Quick-select chips for recent patients */}
-                      {phoneDigits.length < 2 && (
+                      {/* Quick-select chips for recently-added patients.
+                          Click one to fill the form instead of retyping the phone
+                          number. Hidden once the user starts typing. */}
+                      {phoneDigits.length < 2 && recentPatients.length > 0 && (
                         <>
-                          <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">
-                            Recent callers
+                          <div className="mt-3 flex items-baseline gap-2">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">
+                              Recent patients
+                            </span>
+                            <span className="text-[11px] text-[#9aa9b8]">
+                              · tap to pre-fill
+                            </span>
                           </div>
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {recentPatients.slice(0, 4).map((p) => (
@@ -475,10 +507,16 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                   </div>
 
                   {/* Slot grid */}
+                  {slotsLoading && (
+                    <p className="mt-3 text-[11px] text-[#9aa9b8]">
+                      <i className="fas fa-spinner fa-spin mr-1.5" />
+                      Checking which slots are still open…
+                    </p>
+                  )}
                   <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-5">
                     {slots.map((s) => {
                       const isLunch = LUNCH_SLOTS.has(s.short);
-                      const isBooked = BOOKED_SLOTS.has(s.short);
+                      const isBooked = bookedSlots.has(s.short);
                       const isSel = s.short === slot;
                       if (isLunch) {
                         return (

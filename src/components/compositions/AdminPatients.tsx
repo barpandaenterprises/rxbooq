@@ -4,6 +4,7 @@ import * as Popover from "@radix-ui/react-popover";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { AddPatientDialog } from "@/components/molecules/AddPatientDialog";
 import type { PatientLang, PatientRow } from "@/lib/data/admin-patients";
 
 type Lang = PatientLang;
@@ -284,12 +285,16 @@ export function AdminPatients({ initialPatients }: { initialPatients: Patient[] 
           >
             <i className="fas fa-file-export" /> Export CSV
           </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-md bg-cta px-4 py-2 text-[14px] font-medium text-cta-fg hover:bg-[#d92843]"
-          >
-            <i className="fas fa-user-plus" /> Add patient
-          </button>
+          <AddPatientDialog
+            trigger={
+              <button
+                type="button"
+                className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-4 py-2 text-[14px] font-medium text-cta-fg hover:bg-[#d92843]"
+              >
+                <i className="fas fa-user-plus" /> Add patient
+              </button>
+            }
+          />
         </div>
       </div>
 

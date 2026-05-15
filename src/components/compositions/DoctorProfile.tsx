@@ -2,8 +2,10 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { BlockDatesDialog } from "@/components/molecules/BlockDatesDialog";
 import { DoctorScheduleGrid } from "@/components/molecules/DoctorScheduleGrid";
+import { EditDoctorDialog } from "@/components/molecules/EditDoctorDialog";
 import { TEL_HREF, waLink } from "@/lib/contact";
 import {
   BOOKING_SERVICES,
@@ -31,7 +33,12 @@ const TABS: Array<{ value: string; label: string; icon: string }> = [
 
 export function DoctorProfile({ doctor }: Props) {
   const status = STATUS_META[doctor.status];
-  const [editing, setEditing] = useState(false);
+
+  // WhatsApp link to the doctor if their phone is on file, else to the clinic.
+  const doctorPhoneDigits = (doctor.phone ?? "").replace(/\D/g, "");
+  const doctorWaHref = doctorPhoneDigits.length >= 10
+    ? `https://wa.me/${doctorPhoneDigits.length === 10 ? "91" + doctorPhoneDigits : doctorPhoneDigits}?text=${encodeURIComponent(`Hi ${doctor.name},`)}`
+    : waLink(`Hi ${doctor.name},`);
 
   // Patients-seen demo data — filtered out of the global patient list by doctor name.
   const patientsSeen = useMemo(() => {
@@ -51,10 +58,15 @@ export function DoctorProfile({ doctor }: Props) {
       <div className="rounded-[12px] border border-border bg-white p-5">
         <div className="flex flex-wrap items-start gap-4">
           <span
-            className="grid h-16 w-16 flex-none place-items-center rounded-pill text-[22px] font-semibold"
+            className="grid h-16 w-16 flex-none place-items-center overflow-hidden rounded-pill text-[22px] font-semibold"
             style={{ background: doctor.avatarBg, color: doctor.avatarFg }}
           >
-            {doctor.initials}
+            {doctor.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={doctor.photoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              doctor.initials
+            )}
           </span>
 
           <div className="min-w-0 flex-1">
@@ -128,27 +140,37 @@ export function DoctorProfile({ doctor }: Props) {
 
           {/* Action cluster */}
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing((v) => !v)}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-[13px] font-medium text-heading hover:border-link-hover"
-            >
-              <i className="fas fa-pen text-[11px]" /> Edit
-            </button>
+            <EditDoctorDialog
+              doctor={doctor}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-[13px] font-medium text-heading hover:border-link-hover"
+                >
+                  <i className="fas fa-pen text-[11px]" /> Edit
+                </button>
+              }
+            />
             <a
-              href={waLink(`Hi ${doctor.name},`)}
+              href={doctorWaHref}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-[13px] font-medium text-heading no-underline hover:border-[#25D366]"
             >
               <i className="fab fa-whatsapp text-[12px] text-[#25D366]" /> Message
             </a>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-[13px] font-medium text-heading hover:border-link-hover"
-            >
-              <i className="fas fa-calendar-times text-[11px]" /> Block dates
-            </button>
+            <BlockDatesDialog
+              doctorId={doctor.id}
+              doctorName={doctor.name}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-[13px] font-medium text-heading hover:border-link-hover"
+                >
+                  <i className="fas fa-calendar-times text-[11px]" /> Block dates
+                </button>
+              }
+            />
           </div>
         </div>
 
@@ -411,21 +433,6 @@ export function DoctorProfile({ doctor }: Props) {
 
       <div className="h-12" />
 
-      {editing && (
-        <div className="fixed bottom-6 right-6 z-30 rounded-md border-[1.5px] border-cta bg-white px-4 py-3 shadow-md">
-          <div className="text-[12px] text-muted">
-            <i className="fas fa-info-circle mr-1.5 text-cta" />
-            Edit mode is wired to a future server action — UI only for now.
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="ml-3 text-link-hover underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

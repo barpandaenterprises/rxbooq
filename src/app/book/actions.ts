@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { serviceClient } from "@/lib/supabase/server";
-import { useMockData } from "@/lib/feature-flags";
 import { getCurrentClinic } from "@/lib/booking/current-clinic";
 import { sendBookingConfirmation } from "@/lib/wa/booking";
 
@@ -24,8 +23,7 @@ const publicBookingSchema = z.object({
 export type PublicBookingInput = z.infer<typeof publicBookingSchema>;
 
 export type PublicBookingResult =
-  | { ok: true;  mock: true }
-  | { ok: true;  mock: false; appointmentId: string; bookingRef: string }
+  | { ok: true;  appointmentId: string; bookingRef: string }
   | { ok: false; error: string };
 
 function bookingRefFrom(uuid: string): string {
@@ -49,10 +47,6 @@ export async function createPublicBookingAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
   const input = parsed.data;
-
-  if (useMockData()) {
-    return { ok: true, mock: true };
-  }
 
   const clinic = await getCurrentClinic();
   if (!clinic) {
@@ -149,7 +143,6 @@ export async function createPublicBookingAction(
 
   return {
     ok:            true,
-    mock:          false,
     appointmentId: appt.id,
     bookingRef:    bookingRefFrom(appt.id),
   };

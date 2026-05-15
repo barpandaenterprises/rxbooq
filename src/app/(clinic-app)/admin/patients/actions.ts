@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { serverClient } from "@/lib/supabase/server";
-import { useMockData } from "@/lib/feature-flags";
 
 const E164 = z.string().regex(/^\+\d{10,15}$/, "Phone must be E.164 like +919876543210");
 
@@ -26,14 +25,12 @@ export type CreatePatientInput = z.infer<typeof createPatientSchema>;
 
 export async function createPatientAction(
   rawInput: CreatePatientInput,
-): Promise<{ ok: true; mock: boolean; patientId?: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; patientId: string } | { ok: false; error: string }> {
   const parsed = createPatientSchema.safeParse(rawInput);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
   const input = parsed.data;
-
-  if (useMockData()) return { ok: true, mock: true };
 
   const supabase = await serverClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -67,7 +64,7 @@ export async function createPatientAction(
   }
 
   revalidatePath("/admin/patients");
-  return { ok: true, mock: false, patientId: patient.id };
+  return { ok: true, patientId: patient.id };
 }
 
 // =============================================================================
@@ -89,8 +86,6 @@ export type UpdatePatientInput = {
 export async function updatePatientAction(
   input: UpdatePatientInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (useMockData()) return { ok: true };
-
   const supabase = await serverClient();
   const patch: Record<string, unknown> = {};
 
@@ -122,8 +117,6 @@ export async function updatePatientAction(
 export async function archivePatientAction(
   patientId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (useMockData()) return { ok: true };
-
   const supabase = await serverClient();
 
   const { data: current, error: rErr } = await supabase

@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { serverClient, serviceClient } from "@/lib/supabase/server";
-import { useMockData } from "@/lib/feature-flags";
 
 // =============================================================================
 // Helpers
@@ -65,7 +64,7 @@ const inviteSchema = z.object({
 export type InviteClinicUserInput = z.infer<typeof inviteSchema>;
 
 export type InviteClinicUserResult =
-  | { ok: true; mock: boolean }
+  | { ok: true }
   | { ok: false; error: string };
 
 export async function inviteClinicUserAction(
@@ -76,8 +75,6 @@ export async function inviteClinicUserAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
   const input = parsed.data;
-
-  if (useMockData()) return { ok: true, mock: true };
 
   const gate = await requireClinicAdmin();
   if (!gate.ok) return gate;
@@ -154,7 +151,7 @@ async function linkAuthUserToClinic(args: {
   }
 
   revalidatePath("/admin/settings/team");
-  return { ok: true, mock: false };
+  return { ok: true };
 }
 
 // =============================================================================
@@ -173,8 +170,6 @@ export async function updateClinicUserRoleAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
-  if (useMockData()) return { ok: true };
-
   const gate = await requireClinicAdmin();
   if (!gate.ok) return gate;
 
@@ -207,8 +202,6 @@ export async function deactivateClinicUserAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
-  if (useMockData()) return { ok: true };
-
   const gate = await requireClinicAdmin();
   if (!gate.ok) return gate;
 

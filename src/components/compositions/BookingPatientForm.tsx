@@ -122,7 +122,8 @@ export function BookingPatientForm({ service, doctor, date, slot, clinicName, cl
         ...(doctor ? { doctor: doctor.id } : {}),
         mobile:  mobile.replace(/\s+/g, ""),
         locale,
-        ...(result.mock ? {} : { ref: result.bookingRef, id: result.appointmentId }),
+        ref: result.bookingRef,
+        id:  result.appointmentId,
       });
       router.push(`/book/success?${params.toString()}`);
     });

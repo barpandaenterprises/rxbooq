@@ -1,9 +1,28 @@
 "use client";
 
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Popover from "@radix-ui/react-popover";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState, useTransition } from "react";
+import { reorderDoctorsAction } from "@/app/(clinic-app)/admin/doctors/actions";
 import { AddDoctorDialog } from "@/components/molecules/AddDoctorDialog";
 import {
   SPECIALTIES,
@@ -14,7 +33,7 @@ import {
   type Specialty,
 } from "@/lib/doctors-data";
 
-type SortKey = "name" | "experience" | "patients" | "rating";
+type SortKey = "manual" | "name" | "experience" | "patients" | "rating";
 type SortDir = "asc" | "desc";
 
 const STATUS_FILTERS: Array<{ value: DoctorStatus | "all"; label: string }> = [
@@ -25,12 +44,22 @@ const STATUS_FILTERS: Array<{ value: DoctorStatus | "all"; label: string }> = [
 ];
 
 export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
+  const router = useRouter();
+  // Local order so drag-and-drop feels instant. We sync to the server in the
+  // background; on success the router.refresh() pulls the canonical order back.
   const [doctors, setDoctors] = useState<Doctor[]>(initialDoctors);
+  // Reset local order if a fresh server render arrives (e.g. after an add).
+  if (initialDoctors !== doctors && initialDoctors.length !== doctors.length) {
+    setDoctors(initialDoctors);
+  }
+  const [, startSaveTransition] = useTransition();
+  const [reorderError, setReorderError] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [specialty, setSpecialty] = useState<Specialty | "all">("all");
   const [statusFilter, setStatusFilter] = useState<DoctorStatus | "all">("all");
   const [visitingFilter, setVisitingFilter] = useState<"all" | "everyday" | "visiting">("all");
-  const [sortBy, setSortBy] = useState<SortKey>("experience");
+  const [sortBy, setSortBy] = useState<SortKey>("manual");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [specOpen, setSpecOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
@@ -50,6 +79,10 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
   }, [doctors, search, specialty, statusFilter, visitingFilter]);
 
   const sorted = useMemo(() => {
+    if (sortBy === "manual") {
+      // Preserve the local order (the source of truth while dragging).
+      return filtered;
+    }
     const arr = [...filtered];
     const dir = sortDir === "asc" ? 1 : -1;
     arr.sort((a, b) => {
@@ -59,9 +92,48 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
         case "patients":   return dir * (a.stats.patientsServed - b.stats.patientsServed);
         case "rating":     return dir * (a.stats.avgRating - b.stats.avgRating);
       }
+      return 0;
     });
     return arr;
   }, [filtered, sortBy, sortDir]);
+
+  // Drag-and-drop wiring — only enabled when no filters / search / non-manual sort
+  // are active. Otherwise the visual order doesn't match the canonical sequence
+  // and reordering would do something surprising.
+  const dragDisabled =
+    sortBy !== "manual" ||
+    search.trim().length > 0 ||
+    specialty !== "all" ||
+    statusFilter !== "all" ||
+    visitingFilter !== "all";
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = doctors.findIndex((d) => d.id === active.id);
+    const newIndex = doctors.findIndex((d) => d.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const next = arrayMove(doctors, oldIndex, newIndex);
+    setDoctors(next);                          // optimistic
+    setReorderError(null);
+
+    startSaveTransition(async () => {
+      const result = await reorderDoctorsAction({ doctorIds: next.map((d) => d.id) });
+      if (!result.ok) {
+        // Roll back on failure.
+        setDoctors(doctors);
+        setReorderError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  };
 
   const toggleSort = (key: SortKey) => {
     if (sortBy === key) {
@@ -83,10 +155,6 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
     (specialty !== "all" ? 1 : 0) +
     (statusFilter !== "all" ? 1 : 0) +
     (visitingFilter !== "all" ? 1 : 0);
-
-  const handleAdded = (d: Doctor) => {
-    setDoctors((prev) => [d, ...prev]);
-  };
 
   const counts = {
     total: doctors.length,
@@ -117,7 +185,6 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
             <i className="fas fa-file-export" /> Export CSV
           </button>
           <AddDoctorDialog
-            onAdded={handleAdded}
             trigger={
               <button
                 type="button"
@@ -253,8 +320,36 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
           </span>
         </div>
 
+        {reorderError && (
+          <div role="alert" className="border-b border-danger/30 bg-red-50 px-4 py-2 text-[12px] text-danger">
+            <i className="fas fa-exclamation-triangle mr-1.5" />
+            Could not save the new order — {reorderError}
+          </div>
+        )}
+
+        {!dragDisabled && sorted.length > 1 && (
+          <div className="border-b border-border bg-[#FFF8EC] px-4 py-2 text-[11px] text-[#7a5c2b]">
+            <i className="fas fa-hand-paper mr-1.5" />
+            Drag a doctor up or down to change the order patients see them in.
+          </div>
+        )}
+        {sortBy !== "manual" && (
+          <div className="flex items-center gap-2 border-b border-border bg-surface-muted px-4 py-2 text-[11px] text-muted">
+            <i className="fas fa-sort" />
+            Showing a temporary sort. Drag-and-drop reorder is paused.
+            <button
+              type="button"
+              onClick={() => { setSortBy("manual"); setSortDir("asc"); }}
+              className="ml-auto text-link-hover hover:underline"
+            >
+              Switch back to manual order
+            </button>
+          </div>
+        )}
+
         <table className="w-full table-fixed border-collapse">
           <colgroup>
+            <col style={{ width: 32 }} />
             <col />
             <col style={{ width: 180 }} />
             <col style={{ width: 130 }} />
@@ -265,6 +360,7 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
           </colgroup>
           <thead>
             <tr className="border-b border-border bg-surface-muted">
+              <th />
               <SortHeader label="Doctor"      sortKey="name"       currentKey={sortBy} dir={sortDir} onClick={toggleSort} />
               <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Specialty</th>
               <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Status</th>
@@ -274,23 +370,30 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
               <th />
             </tr>
           </thead>
-          <tbody>
-            {sorted.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-12 text-center">
-                  <div className="inline-flex flex-col items-center gap-2 text-[13px] text-muted">
-                    <i className="fas fa-search text-[24px] text-[#cdd9e4]" />
-                    No doctors match these filters.
-                    <button type="button" onClick={clearAll} className="text-[13px] text-link-hover underline">
-                      Clear all filters
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              sorted.map((d) => <DoctorRow key={d.id} d={d} />)
-            )}
-          </tbody>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext
+              items={sorted.map((d) => d.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody>
+                {sorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center">
+                      <div className="inline-flex flex-col items-center gap-2 text-[13px] text-muted">
+                        <i className="fas fa-search text-[24px] text-[#cdd9e4]" />
+                        No doctors match these filters.
+                        <button type="button" onClick={clearAll} className="text-[13px] text-link-hover underline">
+                          Clear all filters
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  sorted.map((d) => <DoctorRow key={d.id} d={d} draggable={!dragDisabled} />)
+                )}
+              </tbody>
+            </SortableContext>
+          </DndContext>
         </table>
       </div>
 
@@ -308,17 +411,54 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
   );
 }
 
-function DoctorRow({ d }: { d: Doctor }) {
+function DoctorRow({ d, draggable }: { d: Doctor; draggable: boolean }) {
   const status = STATUS_META[d.status];
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: d.id,
+    disabled: !draggable,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity:    isDragging ? 0.6 : 1,
+    background: isDragging ? "#FAFBFC" : undefined,
+  };
+
   return (
-    <tr className="border-b border-[#F4F5F7] bg-white hover:bg-[#FAFAFB]">
-      <td className="px-3 py-3 pl-4">
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className="border-b border-[#F4F5F7] bg-white hover:bg-[#FAFAFB]"
+    >
+      <td className="px-2 py-3 pl-3 align-middle">
+        {draggable ? (
+          <button
+            type="button"
+            aria-label="Drag to reorder"
+            {...attributes}
+            {...listeners}
+            className="grid h-7 w-6 cursor-grab place-items-center rounded-sm text-[#cdd9e4] hover:bg-surface-muted hover:text-muted active:cursor-grabbing"
+          >
+            <i className="fas fa-grip-vertical text-[12px]" />
+          </button>
+        ) : (
+          <span className="grid h-7 w-6 place-items-center text-[#cdd9e4]">
+            <i className="fas fa-grip-vertical text-[12px] opacity-40" />
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-3">
         <Link href={`/admin/doctors/${d.id}`} className="flex items-center gap-2.5 no-underline">
           <span
-            className="grid h-10 w-10 flex-none place-items-center rounded-pill text-[13px] font-semibold"
+            className="grid h-10 w-10 flex-none place-items-center overflow-hidden rounded-pill text-[13px] font-semibold"
             style={{ background: d.avatarBg, color: d.avatarFg }}
           >
-            {d.initials}
+            {d.photoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={d.photoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              d.initials
+            )}
           </span>
           <div>
             <div className="text-[14px] font-semibold text-heading">{d.name}</div>
@@ -372,10 +512,15 @@ function DoctorCardMobile({ d }: { d: Doctor }) {
       className="flex items-start gap-3 rounded-[12px] border border-border bg-white p-3.5 no-underline"
     >
       <span
-        className="grid h-11 w-11 flex-none place-items-center rounded-pill text-[14px] font-semibold"
+        className="grid h-11 w-11 flex-none place-items-center overflow-hidden rounded-pill text-[14px] font-semibold"
         style={{ background: d.avatarBg, color: d.avatarFg }}
       >
-        {d.initials}
+        {d.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={d.photoUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          d.initials
+        )}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">

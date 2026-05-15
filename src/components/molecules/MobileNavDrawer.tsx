@@ -3,9 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { useState } from "react";
-import { LanguageSwitcher } from "@/components/molecules/LanguageSwitcher";
 import { TEL_HREF, waLink, CLINIC_PHONE_DISPLAY } from "@/lib/contact";
-import type { Locale } from "@/lib/locale";
 
 const NAV_ITEMS = [
   { label: "Home", href: "/" },
@@ -15,7 +13,7 @@ const NAV_ITEMS = [
   { label: "Contact", href: "/#contact" },
 ];
 
-export function MobileNavDrawer({ locale }: { locale: Locale }) {
+export function MobileNavDrawer() {
   const [open, setOpen] = useState(false);
 
   return (
@@ -63,14 +61,6 @@ export function MobileNavDrawer({ locale }: { locale: Locale }) {
               </Link>
             ))}
 
-            <div className="mt-3 border-t border-border pt-4">
-              <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">
-                Language
-              </div>
-              <div className="px-3">
-                <LanguageSwitcher current={locale} />
-              </div>
-            </div>
           </nav>
 
           <div className="flex flex-col gap-2.5 border-t border-border bg-surface-muted px-5 py-4">

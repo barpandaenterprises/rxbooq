@@ -69,6 +69,8 @@ export type Doctor = {
   initials: string;
   avatarBg: string;
   avatarFg: string;
+  /** Public URL to the doctor's photo (public-assets bucket). Empty if none uploaded. */
+  photoUrl?: string;
   /** Comma-stringable list like "MDS, MPH, PHDMC" */
   qualifications: string[];
   registrationNumber: string;

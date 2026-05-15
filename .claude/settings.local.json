@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Read(//c/Desktop/Healthcare/**)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(npm install *)"
     ]
   }
 }

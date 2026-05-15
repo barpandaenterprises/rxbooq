@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { serverClient } from "@/lib/supabase/server";
-import { useMockData } from "@/lib/feature-flags";
 import { sendWaSession } from "@/lib/wa/send";
 
 const replySchema = z.object({
@@ -14,8 +13,7 @@ const replySchema = z.object({
 export type SendReplyInput = z.infer<typeof replySchema>;
 
 export type SendReplyResult =
-  | { ok: true;  mock: true }
-  | { ok: true;  mock: false; providerMessageId: string }
+  | { ok: true;  providerMessageId: string }
   | { ok: false; error: string };
 
 /**
@@ -35,8 +33,6 @@ export async function sendInboxReplyAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
   const input = parsed.data;
-
-  if (useMockData()) return { ok: true, mock: true };
 
   const supabase = await serverClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -69,6 +65,8 @@ export async function sendInboxReplyAction(
 
   revalidatePath("/admin/messages");
 
-  if (result.mock) return { ok: true, mock: true };
-  return { ok: true, mock: false, providerMessageId: result.providerMessageId };
+  return {
+    ok: true,
+    providerMessageId: result.mock ? "" : result.providerMessageId,
+  };
 }

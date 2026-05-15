@@ -165,6 +165,7 @@ async function getLiveDoctors(): Promise<Doctor[]> {
       initials:            initialsOf(r.display_name),
       avatarBg:            palette.bg,
       avatarFg:            palette.fg,
+      photoUrl:            r.photo_url ?? undefined,
       qualifications:      r.qualifications ? r.qualifications.split(",").map((s) => s.trim()).filter(Boolean) : [],
       registrationNumber:  r.registration_no ?? "",
       primarySpecialty:    coerceSpecialty(r.primary_specialty),

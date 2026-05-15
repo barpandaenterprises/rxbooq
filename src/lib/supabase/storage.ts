@@ -121,3 +121,21 @@ export function getPublicAssetUrl(path: string): string {
   const supabase = serviceClient();
   return supabase.storage.from(PUBLIC_ASSETS_BUCKET).getPublicUrl(path).data.publicUrl;
 }
+
+export async function deletePublicAsset(path: string): Promise<boolean> {
+  const supabase = serviceClient();
+  const { error } = await supabase.storage.from(PUBLIC_ASSETS_BUCKET).remove([path]);
+  return !error;
+}
+
+/**
+ * Best-effort parse: given a public URL emitted by `getPublicAssetUrl`, extract
+ * the storage `path` inside the bucket. Returns null if the URL isn't shaped
+ * like a public-assets URL from this Supabase project (e.g. external image).
+ */
+export function publicAssetPathFromUrl(publicUrl: string): string | null {
+  const marker = `/storage/v1/object/public/${PUBLIC_ASSETS_BUCKET}/`;
+  const idx = publicUrl.indexOf(marker);
+  if (idx === -1) return null;
+  return decodeURIComponent(publicUrl.slice(idx + marker.length));
+}
