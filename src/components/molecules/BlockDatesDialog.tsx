@@ -9,9 +9,12 @@ import { z } from "zod";
 import { blockDoctorDatesAction } from "@/app/(clinic-app)/admin/doctors/actions";
 
 type Props = {
-  trigger:    React.ReactNode;
-  doctorId:   string;
-  doctorName: string;
+  trigger?:    React.ReactNode;
+  doctorId:    string;
+  doctorName:  string;
+  /** Optional controlled-mode — open state owned by the parent. */
+  open?:         boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 // =============================================================================
@@ -57,9 +60,20 @@ const DEFAULT_VALUES: BlockFormValues = {
 // Component
 // =============================================================================
 
-export function BlockDatesDialog({ trigger, doctorId, doctorName }: Props) {
+export function BlockDatesDialog({
+  trigger,
+  doctorId,
+  doctorName,
+  open: controlledOpen,
+  onOpenChange,
+}: Props) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -122,7 +136,7 @@ export function BlockDatesDialog({ trigger, doctorId, doctorName }: Props) {
         }, 200);
       }}
     >
-      <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
+      {trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-[rgba(16,24,40,0.55)]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[calc(100%-1.5rem)] max-w-[520px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_60px_-12px_rgba(16,24,40,0.30)] focus:outline-none">

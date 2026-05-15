@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { sendInboxReplyAction } from "@/app/(clinic-app)/admin/messages/actions";
+import { BroadcastDialog } from "@/components/molecules/BroadcastDialog";
+import { WaTemplatesDialog } from "@/components/molecules/WaTemplatesDialog";
 import type { Bubble, Thread, ThreadStatus } from "@/lib/data/admin-messages";
 
 type ThreadFilter = "All" | "Unread" | "Failed" | "Replied";
@@ -260,18 +262,26 @@ export function AdminMessages({ initialThreads }: { initialThreads: Thread[] }) 
             · {threads.length} conversations · {counts.Unread} unread
           </span>
           <div className="ml-auto flex gap-2.5">
-            <button
-              type="button"
-              className="hidden items-center gap-2 rounded-md border-[1.5px] border-link-hover bg-transparent px-3.5 py-2 text-[14px] font-medium text-link-hover hover:bg-link-hover hover:text-white md:inline-flex"
-            >
-              <i className="fas fa-cog" /> Templates
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-md bg-cta px-4 py-2 text-[14px] font-medium text-cta-fg hover:bg-[#d92843]"
-            >
-              <i className="fas fa-paper-plane" /> Broadcast
-            </button>
+            <WaTemplatesDialog
+              trigger={
+                <button
+                  type="button"
+                  className="hidden cursor-pointer items-center gap-2 rounded-md border-[1.5px] border-link-hover bg-transparent px-3.5 py-2 text-[14px] font-medium text-link-hover hover:bg-link-hover hover:text-white md:inline-flex"
+                >
+                  <i className="fas fa-cog" /> Templates
+                </button>
+              }
+            />
+            <BroadcastDialog
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-4 py-2 text-[14px] font-medium text-cta-fg hover:bg-[#d92843]"
+                >
+                  <i className="fas fa-paper-plane" /> Broadcast
+                </button>
+              }
+            />
           </div>
         </div>
       </div>

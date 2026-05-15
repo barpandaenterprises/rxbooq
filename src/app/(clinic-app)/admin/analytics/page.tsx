@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 type PageProps = {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ period?: string; doctor?: string; service?: string }>;
 };
 
 function parsePeriod(raw: string | undefined): AnalyticsPeriod {
@@ -15,9 +15,17 @@ function parsePeriod(raw: string | undefined): AnalyticsPeriod {
   return "30d";
 }
 
+function parseId(raw: string | undefined): string | null {
+  if (!raw || raw === "all") return null;
+  return raw;
+}
+
 export default async function AdminAnalyticsPage({ searchParams }: PageProps) {
-  const { period } = await searchParams;
-  const data = await getAdminAnalyticsData(parsePeriod(period));
+  const { period, doctor, service } = await searchParams;
+  const data = await getAdminAnalyticsData(parsePeriod(period), {
+    doctorId:  parseId(doctor),
+    serviceId: parseId(service),
+  });
 
   return (
     <ClinicAppLayout active="Analytics">

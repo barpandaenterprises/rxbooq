@@ -22,8 +22,10 @@ import * as Popover from "@radix-ui/react-popover";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { reorderDoctorsAction } from "@/app/(clinic-app)/admin/doctors/actions";
+import { deactivateDoctorAction, reorderDoctorsAction } from "@/app/(clinic-app)/admin/doctors/actions";
 import { AddDoctorDialog } from "@/components/molecules/AddDoctorDialog";
+import { BlockDatesDialog } from "@/components/molecules/BlockDatesDialog";
+import { EditDoctorDialog } from "@/components/molecules/EditDoctorDialog";
 import {
   SPECIALTIES,
   STATUS_META,
@@ -347,34 +349,34 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
           </div>
         )}
 
-        <table className="w-full table-fixed border-collapse">
-          <colgroup>
-            <col style={{ width: 32 }} />
-            <col />
-            <col style={{ width: 180 }} />
-            <col style={{ width: 130 }} />
-            <col style={{ width: 150 }} />
-            <col style={{ width: 110 }} />
-            <col style={{ width: 100 }} />
-            <col style={{ width: 60 }} />
-          </colgroup>
-          <thead>
-            <tr className="border-b border-border bg-surface-muted">
-              <th />
-              <SortHeader label="Doctor"      sortKey="name"       currentKey={sortBy} dir={sortDir} onClick={toggleSort} />
-              <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Specialty</th>
-              <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Status</th>
-              <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Schedule</th>
-              <SortHeader label="Experience"  sortKey="experience" currentKey={sortBy} dir={sortDir} onClick={toggleSort} align="right" />
-              <SortHeader label="Rating"      sortKey="rating"     currentKey={sortBy} dir={sortDir} onClick={toggleSort} align="right" />
-              <th />
-            </tr>
-          </thead>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext
-              items={sorted.map((d) => d.id)}
-              strategy={verticalListSortingStrategy}
-            >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext
+            items={sorted.map((d) => d.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <table className="w-full table-fixed border-collapse">
+              <colgroup>
+                <col style={{ width: 32 }} />
+                <col />
+                <col style={{ width: 180 }} />
+                <col style={{ width: 130 }} />
+                <col style={{ width: 150 }} />
+                <col style={{ width: 110 }} />
+                <col style={{ width: 100 }} />
+                <col style={{ width: 60 }} />
+              </colgroup>
+              <thead>
+                <tr className="border-b border-border bg-surface-muted">
+                  <th />
+                  <SortHeader label="Doctor"      sortKey="name"       currentKey={sortBy} dir={sortDir} onClick={toggleSort} />
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Specialty</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Status</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Schedule</th>
+                  <SortHeader label="Experience"  sortKey="experience" currentKey={sortBy} dir={sortDir} onClick={toggleSort} align="right" />
+                  <SortHeader label="Rating"      sortKey="rating"     currentKey={sortBy} dir={sortDir} onClick={toggleSort} align="right" />
+                  <th />
+                </tr>
+              </thead>
               <tbody>
                 {sorted.length === 0 ? (
                   <tr>
@@ -392,9 +394,9 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
                   sorted.map((d) => <DoctorRow key={d.id} d={d} draggable={!dragDisabled} />)
                 )}
               </tbody>
-            </SortableContext>
-          </DndContext>
-        </table>
+            </table>
+          </SortableContext>
+        </DndContext>
       </div>
 
       {/* Mobile cards */}
@@ -498,7 +500,7 @@ function DoctorRow({ d, draggable }: { d: Doctor; draggable: boolean }) {
         )}
       </td>
       <td className="px-3 py-3 pr-4 text-right">
-        <DoctorRowMenu doctorId={d.id} doctorName={d.name} />
+        <DoctorRowMenu d={d} />
       </td>
     </tr>
   );
@@ -544,48 +546,117 @@ function DoctorCardMobile({ d }: { d: Doctor }) {
   );
 }
 
-function DoctorRowMenu({ doctorId, doctorName }: { doctorId: string; doctorName: string }) {
+function DoctorRowMenu({ d }: { d: Doctor }) {
+  const router = useRouter();
+  const [editOpen, setEditOpen]   = useState(false);
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [isDeactivating, startDeactivate] = useTransition();
+
+  // WhatsApp deep link: prefer doctor's phone (with +91 if local 10-digit),
+  // hide the option entirely if no phone is on file.
+  const phoneDigits = (d.phone ?? "").replace(/\D/g, "");
+  const waHref =
+    phoneDigits.length === 10
+      ? `https://wa.me/91${phoneDigits}?text=${encodeURIComponent(`Hi ${d.name},`)}`
+      : phoneDigits.length > 10
+        ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(`Hi ${d.name},`)}`
+        : null;
+
+  const onDeactivate = () => {
+    if (d.status === "inactive") return;
+    const ok = window.confirm(
+      `Mark ${d.name} as inactive? They will be hidden from booking flows but the profile is kept for records.`,
+    );
+    if (!ok) return;
+    startDeactivate(async () => {
+      const result = await deactivateDoctorAction(d.id);
+      if (!result.ok) {
+        window.alert(`Could not deactivate: ${result.error}`);
+        return;
+      }
+      router.refresh();
+    });
+  };
+
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          aria-label={`Actions for ${doctorName}`}
-          className="grid h-8 w-8 cursor-pointer place-items-center rounded-md border border-border bg-white text-muted hover:text-link-hover"
-        >
-          <i className="fas fa-ellipsis-v text-[13px]" />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content align="end" sideOffset={4} className="z-50 w-[200px] rounded-md border border-border bg-white p-1.5 shadow-md">
-          <DropdownMenu.Item asChild>
-            <Link
-              href={`/admin/doctors/${doctorId}`}
-              className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading no-underline outline-none hover:bg-surface-muted"
+    <>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            aria-label={`Actions for ${d.name}`}
+            className="grid h-8 w-8 cursor-pointer place-items-center rounded-md border border-border bg-white text-muted hover:text-link-hover"
+          >
+            <i className="fas fa-ellipsis-v text-[13px]" />
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content align="end" sideOffset={4} className="z-50 w-[200px] rounded-md border border-border bg-white p-1.5 shadow-md">
+            <DropdownMenu.Item asChild>
+              <Link
+                href={`/admin/doctors/${d.id}`}
+                className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading no-underline outline-none hover:bg-surface-muted"
+              >
+                <i className="fas fa-eye w-4 text-center text-[12px] text-muted" />
+                View profile
+              </Link>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              onSelect={(e) => { e.preventDefault(); setEditOpen(true); }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading outline-none hover:bg-surface-muted"
             >
-              <i className="fas fa-eye w-4 text-center text-[12px] text-muted" />
-              View profile
-            </Link>
-          </DropdownMenu.Item>
-          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading outline-none hover:bg-surface-muted">
-            <i className="fas fa-pen w-4 text-center text-[12px] text-muted" />
-            Edit details
-          </DropdownMenu.Item>
-          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading outline-none hover:bg-surface-muted">
-            <i className="fas fa-calendar-times w-4 text-center text-[12px] text-muted" />
-            Block dates
-          </DropdownMenu.Item>
-          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading outline-none hover:bg-surface-muted">
-            <i className="fab fa-whatsapp w-4 text-center text-[12px] text-[#25D366]" />
-            Send WhatsApp
-          </DropdownMenu.Item>
-          <DropdownMenu.Item className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-cta outline-none hover:bg-surface-muted">
-            <i className="fas fa-user-slash w-4 text-center text-[12px] text-cta" />
-            Deactivate
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+              <i className="fas fa-pen w-4 text-center text-[12px] text-muted" />
+              Edit details
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              onSelect={(e) => { e.preventDefault(); setBlockOpen(true); }}
+              className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading outline-none hover:bg-surface-muted"
+            >
+              <i className="fas fa-calendar-times w-4 text-center text-[12px] text-muted" />
+              Block dates
+            </DropdownMenu.Item>
+            {waHref ? (
+              <DropdownMenu.Item asChild>
+                <a
+                  href={waHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading no-underline outline-none hover:bg-surface-muted"
+                >
+                  <i className="fab fa-whatsapp w-4 text-center text-[12px] text-[#25D366]" />
+                  Send WhatsApp
+                </a>
+              </DropdownMenu.Item>
+            ) : (
+              <DropdownMenu.Item
+                disabled
+                className="flex items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-[#cdd9e4] outline-none"
+              >
+                <i className="fab fa-whatsapp w-4 text-center text-[12px]" />
+                Send WhatsApp (no phone on file)
+              </DropdownMenu.Item>
+            )}
+            <DropdownMenu.Item
+              disabled={d.status === "inactive" || isDeactivating}
+              onSelect={(e) => { e.preventDefault(); onDeactivate(); }}
+              className={
+                "flex items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] outline-none " +
+                (d.status === "inactive"
+                  ? "cursor-not-allowed text-[#cdd9e4]"
+                  : "cursor-pointer text-cta hover:bg-surface-muted")
+              }
+            >
+              <i className="fas fa-user-slash w-4 text-center text-[12px]" />
+              {d.status === "inactive" ? "Already inactive" : isDeactivating ? "Deactivating…" : "Deactivate"}
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+
+      {/* Controlled dialogs — triggered by the menu items above. */}
+      <EditDoctorDialog  doctor={d}                                   open={editOpen}  onOpenChange={setEditOpen} />
+      <BlockDatesDialog  doctorId={d.id} doctorName={d.name}          open={blockOpen} onOpenChange={setBlockOpen} />
+    </>
   );
 }
 

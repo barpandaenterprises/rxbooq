@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import type {
   AdminAnalyticsData,
   AnalyticsPeriod,
@@ -49,32 +49,86 @@ function KpiAnal({ label, value, delta, deltaUp, ic }: { label: string; value: s
   );
 }
 
+/** Round up to a nice y-axis maximum so the gridlines look tidy. */
+function niceMax(value: number): number {
+  if (value <= 0) return 4;
+  const pow = Math.pow(10, Math.floor(Math.log10(value)));
+  const norm = value / pow;
+  let nice: number;
+  if (norm <= 1)      nice = 1;
+  else if (norm <= 2) nice = 2;
+  else if (norm <= 4) nice = 4;
+  else if (norm <= 5) nice = 5;
+  else                nice = 10;
+  return nice * pow;
+}
+
 function LineChart({ data: rawData }: { data: BookingPoint[] }) {
   // Defensive — if the data layer returned zero points, show at least one tick.
-  const data = useMemo(() => (rawData.length > 0 ? rawData : [{ d: "—", online: 0, walkin: 0, phone: 0 }]), [rawData]);
+  const data = useMemo(
+    () => (rawData.length > 0 ? rawData : [{ d: "—", online: 0, walkin: 0, phone: 0 }]),
+    [rawData],
+  );
 
   const W = 880, H = 280;
   const P = { l: 40, r: 20, t: 20, b: 36 };
   const innerW = W - P.l - P.r;
   const innerH = H - P.t - P.b;
-  const max = 56;
+
+  // Dynamic y-scale so a small dataset (e.g. 5 bookings) doesn't render against
+  // a 56-tall axis.
+  const dataMax = Math.max(1, ...data.flatMap((d) => [d.online, d.walkin, d.phone]));
+  const max     = niceMax(dataMax);
+
   const step = data.length > 1 ? innerW / (data.length - 1) : innerW;
   const yT = (v: number) => P.t + innerH - (v / max) * innerH;
   const xT = (i: number) => P.l + i * step;
   const line = (key: "online" | "walkin" | "phone") =>
     data.map((d, i) => `${i === 0 ? "M" : "L"}${xT(i).toFixed(1)} ${yT(d[key]).toFixed(1)}`).join(" ");
   const area = `${line("online")} L ${xT(data.length - 1)} ${P.t + innerH} L ${xT(0)} ${P.t + innerH} Z`;
-  const yTicks = [0, 14, 28, 42, 56];
-
-  // Tooltip pinned to the second-to-last point (always present after a slice).
-  const tipIdx = Math.max(0, data.length - 2);
-  const tip = data[tipIdx]!;
+  const yTicks = [0, max / 4, max / 2, (max * 3) / 4, max].map((v) => Math.round(v));
   const labelEvery = data.length > 8 ? 2 : 1;
 
+  // Hover-driven tooltip. Pins to the rightmost data point when not hovering.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const tipIdx = hoverIdx ?? data.length - 1;
+  const tip    = data[tipIdx]!;
+
+  const onMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!svgRef.current || data.length <= 1) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const xVB  = ((e.clientX - rect.left) / rect.width) * W;
+    if (xVB < P.l || xVB > P.l + innerW) {
+      setHoverIdx(null);
+      return;
+    }
+    const idx = Math.round((xVB - P.l) / step);
+    setHoverIdx(Math.max(0, Math.min(data.length - 1, idx)));
+  };
+
+  // Tooltip dimensions + edge-clamped x position so it never overflows the SVG.
+  const TIP_W = 158;
+  const TIP_H = 82;
+  const tipAnchorX = xT(tipIdx);
+  const tipAnchorY = Math.min(yT(tip.online), yT(tip.walkin), yT(tip.phone));
+  const flipLeft   = tipAnchorX + 12 + TIP_W > W - P.r;
+  const tipX       = flipLeft ? tipAnchorX - 12 - TIP_W : tipAnchorX + 12;
+  const tipYRaw    = tipAnchorY - 12 - TIP_H / 2;
+  const tipY       = Math.max(P.t, Math.min(P.t + innerH - TIP_H, tipYRaw));
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="block w-full">
-      {yTicks.map((t) => (
-        <g key={t}>
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${W} ${H}`}
+      className="block w-full"
+      onMouseMove={onMove}
+      onMouseLeave={() => setHoverIdx(null)}
+    >
+      {yTicks.map((t, i) => (
+        // Index-keyed because rounded tick values can collide on small datasets
+        // (e.g. max=2 produces [0, 1, 1, 2, 2]).
+        <g key={i}>
           <line x1={P.l} x2={P.l + innerW} y1={yT(t)} y2={yT(t)} stroke="#F4F5F7" strokeWidth="1" />
           <text x={P.l - 8} y={yT(t) + 4} fontSize="11" fill="#9aa9b8" textAnchor="end" fontFamily="Poppins">{t}</text>
         </g>
@@ -90,20 +144,22 @@ function LineChart({ data: rawData }: { data: BookingPoint[] }) {
       <path d={line("online")} fill="none" stroke="#0168B3" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
       <path d={line("walkin")} fill="none" stroke="#EE344E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
       <path d={line("phone")} fill="none" stroke="#0E5087" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" />
-      {/* Tooltip */}
-      <line x1={xT(tipIdx)} x2={xT(tipIdx)} y1={P.t} y2={P.t + innerH} stroke="#cdd9e4" strokeDasharray="3 3" strokeWidth="1" />
-      <circle cx={xT(tipIdx)} cy={yT(tip.online)} r="5" fill="#fff" stroke="#0168B3" strokeWidth="2.4" />
-      <circle cx={xT(tipIdx)} cy={yT(tip.walkin)}  r="4" fill="#fff" stroke="#EE344E" strokeWidth="2.2" />
-      <circle cx={xT(tipIdx)} cy={yT(tip.phone)}  r="4" fill="#fff" stroke="#0E5087" strokeWidth="2" />
-      <g transform={`translate(${xT(tipIdx) + 12}, ${yT(tip.online) - 58})`}>
-        <rect width="156" height="78" rx="8" fill="#272B41" />
-        <text x="14" y="20" fontSize="11" fill="#9aa9b8" fontFamily="Poppins">{tip.d}, 2026</text>
-        <circle cx="18" cy="36" r="4" fill="#0168B3" />
-        <text x="28" y="40" fontSize="12" fill="#fff" fontFamily="Poppins">Online · {tip.online}</text>
-        <circle cx="18" cy="54" r="4" fill="#EE344E" />
-        <text x="28" y="58" fontSize="12" fill="#fff" fontFamily="Poppins">Walk-in · {tip.walkin}</text>
-        <circle cx="18" cy="70" r="4" fill="#0E5087" />
-        <text x="28" y="74" fontSize="12" fill="#fff" fontFamily="Poppins">Phone · {tip.phone}</text>
+
+      {/* Crosshair + point markers + tooltip card */}
+      <line x1={tipAnchorX} x2={tipAnchorX} y1={P.t} y2={P.t + innerH} stroke="#cdd9e4" strokeDasharray="3 3" strokeWidth="1" />
+      <circle cx={tipAnchorX} cy={yT(tip.online)} r="5" fill="#fff" stroke="#0168B3" strokeWidth="2.4" />
+      <circle cx={tipAnchorX} cy={yT(tip.walkin)} r="4" fill="#fff" stroke="#EE344E" strokeWidth="2.2" />
+      <circle cx={tipAnchorX} cy={yT(tip.phone)}  r="4" fill="#fff" stroke="#0E5087" strokeWidth="2" />
+
+      <g transform={`translate(${tipX.toFixed(1)}, ${tipY.toFixed(1)})`} pointerEvents="none">
+        <rect width={TIP_W} height={TIP_H} rx="8" fill="#272B41" />
+        <text x="14" y="22" fontSize="11" fill="#9aa9b8" fontFamily="Poppins">{tip.d}</text>
+        <circle cx="18" cy="40" r="4" fill="#0168B3" />
+        <text x="28" y="44" fontSize="12" fill="#fff" fontFamily="Poppins">Online · {tip.online}</text>
+        <circle cx="18" cy="58" r="4" fill="#EE344E" />
+        <text x="28" y="62" fontSize="12" fill="#fff" fontFamily="Poppins">Walk-in · {tip.walkin}</text>
+        <circle cx="18" cy="76" r="4" fill="#0E5087" />
+        <text x="28" y="80" fontSize="12" fill="#fff" fontFamily="Poppins">Phone · {tip.phone}</text>
       </g>
     </svg>
   );
@@ -235,6 +291,9 @@ type FilterBarProps = {
   onDoctorChange: (d: string) => void;
   service: string;
   onServiceChange: (s: string) => void;
+  doctorOptions:  Array<{ id: string; label: string }>;
+  serviceOptions: Array<{ id: string; label: string }>;
+  rangeLabel:     string;
 };
 
 function FilterBar({
@@ -244,6 +303,9 @@ function FilterBar({
   onDoctorChange,
   service,
   onServiceChange,
+  doctorOptions,
+  serviceOptions,
+  rangeLabel,
 }: FilterBarProps) {
   const PILLS: Array<{ key: Period; label: string }> = [
     { key: "7d",     label: "7d" },
@@ -279,7 +341,7 @@ function FilterBar({
           );
         })}
       </div>
-      <span className="text-[13px] text-[#9aa9b8]">{PERIOD_RANGE_LABEL[period]}</span>
+      <span className="text-[13px] text-[#9aa9b8]">{rangeLabel}</span>
       <div className="flex-1" />
       <select
         value={doctor}
@@ -287,9 +349,9 @@ function FilterBar({
         className="cursor-pointer rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading hover:border-link-hover"
       >
         <option value="all">All doctors</option>
-        <option value="manoranjan">Dr. Manoranjan Mahakur</option>
-        <option value="lipsa">Dr. Lipsa Pradhan</option>
-        <option value="rashmita">Dr. Rashmita Sahoo</option>
+        {doctorOptions.map((d) => (
+          <option key={d.id} value={d.id}>{d.label}</option>
+        ))}
       </select>
       <select
         value={service}
@@ -297,9 +359,9 @@ function FilterBar({
         className="cursor-pointer rounded-md border border-border bg-white px-3 py-2 text-[13px] text-heading hover:border-link-hover"
       >
         <option value="all">All services</option>
-        <option value="rct">Root Canal</option>
-        <option value="cleaning">Cleaning</option>
-        <option value="braces">Braces</option>
+        {serviceOptions.map((s) => (
+          <option key={s.id} value={s.id}>{s.label}</option>
+        ))}
       </select>
       <button
         type="button"
@@ -386,10 +448,26 @@ export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
   const searchParams = useSearchParams();
   const period = data.period;
 
-  // Doctor + service filters stay client-side for now — they're not yet wired
-  // through the data layer (would require re-fetching with the filter applied).
+  // Doctor + service filters are URL-driven; the page reads them and re-fetches
+  // with the filter applied at the query layer.
   const doctor  = searchParams.get("doctor")  ?? "all";
   const service = searchParams.get("service") ?? "all";
+
+  const doctorLabel  = doctor  === "all"
+    ? null
+    : data.doctorOptions.find((d) => d.id === doctor)?.label ?? doctor;
+  const serviceLabel = service === "all"
+    ? null
+    : data.serviceOptions.find((s) => s.id === service)?.label ?? service;
+
+  // Pretty range label, e.g. "15 Apr — 14 May 2026"
+  const fmt = (iso: string) =>
+    new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+      day:   "numeric",
+      month: "short",
+      timeZone: "Asia/Kolkata",
+    });
+  const rangeLabel = `${fmt(data.windowStart)} — ${fmt(data.windowEnd)} ${new Date(`${data.windowEnd}T00:00:00Z`).getFullYear()}`;
 
   const setPeriod = (next: Period) => {
     const params = new URLSearchParams(Array.from(searchParams.entries()));
@@ -436,8 +514,8 @@ export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
               <>
                 <span className="mx-2 text-[#9aa9b8]">·</span>
                 Filtered
-                {doctor !== "all" && <> by {doctor === "manoranjan" ? "Dr. Manoranjan" : doctor === "lipsa" ? "Dr. Lipsa" : "Dr. Rashmita"}</>}
-                {service !== "all" && <> · {service === "rct" ? "Root Canal" : service === "cleaning" ? "Cleaning" : "Braces"}</>}
+                {doctorLabel  && <> by {doctorLabel}</>}
+                {serviceLabel && <> · {serviceLabel}</>}
               </>
             )}
           </p>
@@ -451,6 +529,9 @@ export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
         onDoctorChange={setDoctor}
         service={service}
         onServiceChange={setService}
+        doctorOptions={data.doctorOptions}
+        serviceOptions={data.serviceOptions}
+        rangeLabel={rangeLabel}
       />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -464,7 +545,7 @@ export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
         <div className="mb-3.5 flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <h3 className="text-[18px] font-semibold text-heading">Bookings over time</h3>
-            <p className="mt-0.5 text-[12px] text-muted">{PERIOD_LABEL[period]}</p>
+            <p className="mt-0.5 text-[12px] text-muted">{rangeLabel}</p>
           </div>
           <Legend
             items={[
@@ -474,7 +555,21 @@ export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
             ]}
           />
         </div>
-        <LineChart data={data.bookingTimeline} />
+        {(() => {
+          const total = data.bookingTimeline.reduce((sum, p) => sum + p.online + p.walkin + p.phone, 0);
+          if (total === 0) {
+            return (
+              <div className="grid place-items-center px-4 py-16 text-center text-[13px] text-muted">
+                <i className="fas fa-chart-line text-[28px] text-[#cdd9e4]" />
+                <p className="mt-2 font-medium text-heading">No bookings in this window yet.</p>
+                <p className="mt-1 text-[12px]">
+                  Try a longer period, clear filters, or create a few appointments — they&rsquo;ll show up here.
+                </p>
+              </div>
+            );
+          }
+          return <LineChart data={data.bookingTimeline} />;
+        })()}
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">

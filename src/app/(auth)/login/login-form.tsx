@@ -34,9 +34,13 @@ export function LoginForm({ initialError, next }: { initialError?: string; next?
     fd.set("password", values.password);
     if (next) fd.set("next", next);
     startTransition(() => {
-      // Server action redirects on success; rethrows for client navigation. If
-      // there's a hard error path it would land in the catch — surface it.
+      // The server action *always* calls redirect() — to /admin/today on success
+      // or back to /login?error=... on failure. redirect() throws a special
+      // NEXT_REDIRECT "error" that the framework catches to perform the actual
+      // navigation. We must let that one propagate; only surface real errors
+      // (e.g. unexpected network failure).
       signInWithPassword(fd).catch((err: unknown) => {
+        if (isNextRedirectError(err)) throw err;
         setServerError(err instanceof Error ? err.message : "Sign-in failed");
       });
     });
@@ -110,4 +114,14 @@ function inputCls(hasError: boolean): string {
   const base =
     "mt-1 block w-full rounded-md border bg-surface px-3 py-2 text-body shadow-sm focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand";
   return hasError ? `${base} border-danger focus:border-danger focus:ring-danger` : `${base} border-border`;
+}
+
+// Detects the special "error" Next.js throws from a Server Action's
+// `redirect()` call. The shape is { message: "NEXT_REDIRECT", digest: "..." }.
+function isNextRedirectError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { message?: unknown; digest?: unknown };
+  if (typeof e.message === "string" && e.message === "NEXT_REDIRECT") return true;
+  if (typeof e.digest === "string" && e.digest.startsWith("NEXT_REDIRECT")) return true;
+  return false;
 }

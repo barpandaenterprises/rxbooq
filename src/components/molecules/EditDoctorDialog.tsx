@@ -17,8 +17,12 @@ import {
 } from "@/lib/doctors-data";
 
 type Props = {
-  trigger: React.ReactNode;
-  doctor:  Doctor;
+  /** When provided, renders as a click-target for opening the dialog. */
+  trigger?:      React.ReactNode;
+  doctor:        Doctor;
+  /** Optional controlled-mode — open state owned by the parent. */
+  open?:         boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 // =============================================================================
@@ -73,9 +77,14 @@ function localPhone(formatted: string): string {
 // Component
 // =============================================================================
 
-export function EditDoctorDialog({ trigger, doctor }: Props) {
+export function EditDoctorDialog({ trigger, doctor, open: controlledOpen, onOpenChange }: Props) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -180,7 +189,7 @@ export function EditDoctorDialog({ trigger, doctor }: Props) {
         }, 200);
       }}
     >
-      <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
+      {trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-[rgba(16,24,40,0.55)]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[calc(100%-1.5rem)] max-w-[640px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_60px_-12px_rgba(16,24,40,0.30)] focus:outline-none">

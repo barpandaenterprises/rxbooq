@@ -30,16 +30,12 @@ export type SendTemplateOpts = {
 };
 
 export type SendTemplateResult =
-  | { ok: true;  mock: true }
-  | { ok: true;  mock: false; providerMessageId: string }
+  | { ok: true;  providerMessageId: string }
   | { ok: false; error: string; skipped?: "optout" };
 
 export async function sendWaTemplate(opts: SendTemplateOpts): Promise<SendTemplateResult> {
-  if (useMockData()) {
-    return { ok: true, mock: true };
-  }
-
   const supabase = serviceClient();
+  const mock     = useMockData();
 
   // Opt-out gate.
   if (opts.respectOptOut !== false) {
@@ -65,19 +61,25 @@ export async function sendWaTemplate(opts: SendTemplateOpts): Promise<SendTempla
 
   let providerMessageId = "";
   let sendError: string | null = null;
-  try {
-    const result = await interakt.sendTemplate({
-      to:        opts.to,
-      template:  opts.template,
-      language:  opts.language,
-      variables: opts.variables,
-      contextRef: opts.appointmentId
-        ? { type: "appointment", id: opts.appointmentId }
-        : { type: "patient", id: opts.patientId },
-    });
-    providerMessageId = result.providerMessageId;
-  } catch (err) {
-    sendError = err instanceof Error ? err.message : String(err);
+  if (mock) {
+    // Mock mode skips the Interakt round-trip — we still record the message
+    // in wa_messages so the inbox and audit logs look realistic in dev.
+    providerMessageId = `mock-${Date.now()}`;
+  } else {
+    try {
+      const result = await interakt.sendTemplate({
+        to:        opts.to,
+        template:  opts.template,
+        language:  opts.language,
+        variables: opts.variables,
+        contextRef: opts.appointmentId
+          ? { type: "appointment", id: opts.appointmentId }
+          : { type: "patient", id: opts.patientId },
+      });
+      providerMessageId = result.providerMessageId;
+    } catch (err) {
+      sendError = err instanceof Error ? err.message : String(err);
+    }
   }
 
   await supabase.from("wa_messages").insert({
@@ -93,7 +95,7 @@ export async function sendWaTemplate(opts: SendTemplateOpts): Promise<SendTempla
   });
 
   if (sendError) return { ok: false, error: sendError };
-  return { ok: true, mock: false, providerMessageId };
+  return { ok: true, providerMessageId };
 }
 
 function composeBody(opts: SendTemplateOpts): string {
@@ -115,17 +117,20 @@ export type SendSessionOpts = {
 };
 
 export async function sendWaSession(opts: SendSessionOpts): Promise<SendTemplateResult> {
-  if (useMockData()) return { ok: true, mock: true };
-
   const supabase = serviceClient();
+  const mock     = useMockData();
 
   let providerMessageId = "";
   let sendError: string | null = null;
-  try {
-    const result = await interakt.sendSession({ to: opts.to, text: opts.text });
-    providerMessageId = result.providerMessageId;
-  } catch (err) {
-    sendError = err instanceof Error ? err.message : String(err);
+  if (mock) {
+    providerMessageId = `mock-${Date.now()}`;
+  } else {
+    try {
+      const result = await interakt.sendSession({ to: opts.to, text: opts.text });
+      providerMessageId = result.providerMessageId;
+    } catch (err) {
+      sendError = err instanceof Error ? err.message : String(err);
+    }
   }
 
   await supabase.from("wa_messages").insert({
@@ -141,5 +146,5 @@ export async function sendWaSession(opts: SendSessionOpts): Promise<SendTemplate
   });
 
   if (sendError) return { ok: false, error: sendError };
-  return { ok: true, mock: false, providerMessageId };
+  return { ok: true, providerMessageId };
 }

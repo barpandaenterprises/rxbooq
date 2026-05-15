@@ -69,8 +69,23 @@ export type MicrositeTile = {
   data:  number[];
 };
 
+export type AnalyticsFilterOption = {
+  id:    string;
+  label: string;
+};
+
 export type AdminAnalyticsData = {
   period:           AnalyticsPeriod;
+  /** Inclusive ISO date strings (YYYY-MM-DD) for the active window — used in subtitle labels. */
+  windowStart:      string;
+  windowEnd:        string;
+  filters: {
+    doctorId:  string | null;
+    serviceId: string | null;
+  };
+  /** Pickers — populated from live DB so the FilterBar shows real entities. */
+  doctorOptions:    AnalyticsFilterOption[];
+  serviceOptions:   AnalyticsFilterOption[];
   kpis:             AnalyticsKpis;
   bookingTimeline:  BookingPoint[];
   topServices:      ServiceBar[];
@@ -204,24 +219,40 @@ function bucketLabel(d: Date): string {
 // Live fetcher
 // =============================================================================
 
-async function getLiveAnalytics(period: AnalyticsPeriod): Promise<AdminAnalyticsData> {
+async function getLiveAnalytics(
+  period:    AnalyticsPeriod,
+  doctorId:  string | null,
+  serviceId: string | null,
+): Promise<AdminAnalyticsData> {
   const supabase = await serverClient();
   const days     = daysFor(period);
   const now      = Date.now();
   const startMs  = now - days * 86_400_000;
   const prevStartMs = now - 2 * days * 86_400_000;
 
-  const [{ data: appts }, { data: patients }, { data: services }] = await Promise.all([
-    supabase
-      .from("appointments")
-      .select("starts_at, status, source, service:services(name, price_inr)")
-      .gte("starts_at", new Date(prevStartMs).toISOString()),
+  // Build the appointments query, applying filter chips at the DB layer.
+  let apptQ = supabase
+    .from("appointments")
+    .select("starts_at, status, source, service:services(name, price_inr), doctor_id, service_id")
+    .gte("starts_at", new Date(prevStartMs).toISOString());
+  if (doctorId)  apptQ = apptQ.eq("doctor_id",  doctorId);
+  if (serviceId) apptQ = apptQ.eq("service_id", serviceId);
+
+  const [{ data: appts }, { data: patients }, { data: services }, { data: doctors }] = await Promise.all([
+    apptQ,
     supabase
       .from("patients")
       .select("created_at, language"),
     supabase
       .from("services")
-      .select("id, name, is_active"),
+      .select("id, name, is_active")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true }),
+    supabase
+      .from("doctors")
+      .select("id, display_name")
+      .eq("is_active", true)
+      .order("display_order", { ascending: true }),
   ]);
 
   type ApptRow = {
@@ -379,14 +410,22 @@ async function getLiveAnalytics(period: AnalyticsPeriod): Promise<AdminAnalytics
       };
     });
 
+  const windowStartIso = new Date(startMs).toISOString().slice(0, 10);
+  const windowEndIso   = new Date(now).toISOString().slice(0, 10);
+
   return {
     period,
+    windowStart:      windowStartIso,
+    windowEnd:        windowEndIso,
+    filters:          { doctorId, serviceId },
+    doctorOptions:    (doctors ?? []).map((d) => ({ id: d.id, label: d.display_name })),
+    serviceOptions:   (services ?? []).map((s) => ({ id: s.id, label: s.name })),
     kpis,
-    bookingTimeline: points,
+    bookingTimeline:  points,
     topServices,
     languageMix,
     noShows,
-    microsite: MICROSITE,
+    microsite:        MICROSITE,
   };
 }
 
@@ -394,10 +433,39 @@ async function getLiveAnalytics(period: AnalyticsPeriod): Promise<AdminAnalytics
 // Public entry point
 // =============================================================================
 
-export async function getAdminAnalyticsData(period: AnalyticsPeriod): Promise<AdminAnalyticsData> {
+export type AnalyticsFilters = {
+  doctorId?:  string | null;
+  serviceId?: string | null;
+};
+
+function mockWindow(period: AnalyticsPeriod): { start: string; end: string } {
+  const days   = daysFor(period);
+  const now    = Date.now();
+  const start  = new Date(now - days * 86_400_000).toISOString().slice(0, 10);
+  const end    = new Date(now).toISOString().slice(0, 10);
+  return { start, end };
+}
+
+export async function getAdminAnalyticsData(
+  period:   AnalyticsPeriod,
+  filters:  AnalyticsFilters = {},
+): Promise<AdminAnalyticsData> {
+  const doctorId  = filters.doctorId  ?? null;
+  const serviceId = filters.serviceId ?? null;
+
   if (useMockData()) {
+    const { start, end } = mockWindow(period);
     return {
       period,
+      windowStart:     start,
+      windowEnd:       end,
+      filters:         { doctorId, serviceId },
+      doctorOptions:   [
+        { id: "mm",  label: "Dr. Manoranjan Mahakur" },
+        { id: "lp",  label: "Dr. Lipsa Pradhan" },
+        { id: "rs",  label: "Dr. Rashmita Sahoo" },
+      ],
+      serviceOptions:  MOCK_SERVICES.map((s) => ({ id: s.name.toLowerCase().replace(/\s+/g, "-"), label: s.name })),
       kpis:            MOCK_KPIS[period],
       bookingTimeline: MOCK_BOOKING_TIMELINE,
       topServices:     MOCK_SERVICES,
@@ -406,5 +474,5 @@ export async function getAdminAnalyticsData(period: AnalyticsPeriod): Promise<Ad
       microsite:       MICROSITE,
     };
   }
-  return getLiveAnalytics(period);
+  return getLiveAnalytics(period, doctorId, serviceId);
 }
