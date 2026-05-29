@@ -10,6 +10,7 @@ import {
   inviteClinicUserAction,
   updateClinicUserRoleAction,
 } from "@/app/(clinic-app)/admin/settings/team/actions";
+import { SettingsTabs } from "@/components/molecules/SettingsTabs";
 import type { ClinicUserRole, TeamMember } from "@/lib/data/admin-team";
 
 const ROLE_LABEL: Record<ClinicUserRole, string> = {
@@ -108,11 +109,18 @@ export function AdminTeam({ initialMembers }: { initialMembers: TeamMember[] }) 
 
   return (
     <div className="px-5 pt-7 md:px-8 md:pt-8">
-      <div className="mb-6">
-        <h2 className="text-[28px] font-semibold leading-9 text-heading md:text-[32px]">
-          Team
-        </h2>
+      <div className="mb-4">
+        <h2 className="text-[28px] font-semibold leading-9 text-heading md:text-[32px]">Settings</h2>
         <p className="mt-1 text-[14px] text-muted">
+          Manage your team, departments, and clinic configuration.
+        </p>
+      </div>
+
+      <SettingsTabs active="team" />
+
+      <div className="mb-5">
+        <h3 className="text-[18px] font-semibold text-heading">Team</h3>
+        <p className="mt-1 text-[13px] text-muted">
           Invite doctors, receptionists, and other admins. Each person gets a one-time magic link to set their password.
         </p>
       </div>

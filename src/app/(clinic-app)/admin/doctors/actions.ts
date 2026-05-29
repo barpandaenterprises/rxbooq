@@ -30,6 +30,8 @@ export type AddDoctorInput = {
   phone:              string | null;
   email:              string | null;
   primarySpecialty:   string | null;
+  /** FK to public.departments (migration 0010). Optional for backwards-compat. */
+  departmentId?:      string | null;
   visiting:           boolean;
   visitingNote:       string | null;
   status:             AddDoctorStatus;
@@ -93,6 +95,7 @@ export async function addDoctorAction(input: AddDoctorInput): Promise<AddDoctorR
       phone:             input.phone,
       email:             input.email,
       primary_specialty: input.primarySpecialty,
+      department_id:     input.departmentId ?? null,
       visiting:          input.visiting,
       visiting_note:     input.visitingNote,
       status:            input.status,

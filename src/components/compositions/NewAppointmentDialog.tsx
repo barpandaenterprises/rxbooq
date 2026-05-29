@@ -9,24 +9,30 @@ import { z } from "zod";
 import { formatLongDate, formatSlotLabel, toLocalIso } from "@/lib/booking-data";
 import {
   createAppointmentAction,
-  getBookedSlotsAction,
+  getDeptSlotsForDateAction,
+  getDoctorSlotsForDateAction,
+  getDoctorWorkingDatesAction,
+  getDoctorsForSlotAction,
 } from "@/app/(clinic-app)/admin/appointments/actions";
-import type {
-  BookingLookups,
-  BookingLookupRecentPatient,
-} from "@/lib/data/booking-lookups";
+import {
+  slotsInWindows,
+  subtractBooked,
+  type WorkingWindow,
+} from "@/lib/data/booking-availability";
+import type { BookingLookups } from "@/lib/data/booking-lookups";
 
-type RecentPatient = BookingLookupRecentPatient;
-
-// ---------- Form schema ----------------------------------------------------
+// =============================================================================
+// Form schema
+// =============================================================================
 
 const apptFormSchema = z
   .object({
     selectedPatientId: z.string().nullable(),
     phone:             z.string(),
     name:              z.string(),
-    serviceId:         z.string().min(1, "Pick a service"),
-    doctorId:          z.string().min(1, "Pick a doctor"),
+    mode:              z.enum(["byDept", "byDoctor"]),
+    departmentId:      z.string().nullable(),
+    doctorId:          z.string().nullable(),
     dateIso:           z.string().min(1),
     slot:              z.string().nullable(),
     sendWhatsApp:      z.boolean(),
@@ -36,19 +42,17 @@ const apptFormSchema = z
     if (!v.selectedPatientId) {
       const digits = v.phone.replace(/\D/g, "");
       if (digits.length !== 10) {
-        ctx.addIssue({
-          code:    "custom",
-          message: "Enter a 10-digit phone number",
-          path:    ["phone"],
-        });
+        ctx.addIssue({ code: "custom", message: "Enter a 10-digit phone number", path: ["phone"] });
       }
       if (v.name.trim().length < 2) {
-        ctx.addIssue({
-          code:    "custom",
-          message: "Enter the patient's name",
-          path:    ["name"],
-        });
+        ctx.addIssue({ code: "custom", message: "Enter the patient's name", path: ["name"] });
       }
+    }
+    if (v.mode === "byDept" && !v.departmentId) {
+      ctx.addIssue({ code: "custom", message: "Pick a department", path: ["departmentId"] });
+    }
+    if (!v.doctorId) {
+      ctx.addIssue({ code: "custom", message: "Pick a doctor", path: ["doctorId"] });
     }
     if (!v.slot) {
       ctx.addIssue({ code: "custom", message: "Pick a time slot", path: ["slot"] });
@@ -57,54 +61,48 @@ const apptFormSchema = z
 
 type ApptFormValues = z.infer<typeof apptFormSchema>;
 
+// =============================================================================
+// Date row (30 days)
+// =============================================================================
+
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-const MONTH_LABELS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-] as const;
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
 
-// Booked slots are loaded dynamically per doctor + date via getBookedSlotsAction.
-// Lunch break is currently a static window — to be replaced with availability_overrides later.
-const LUNCH_SLOTS = new Set(["14:00", "14:30"]);
+const DATE_RANGE_DAYS = 30;
 
-type DemoDate = { iso: string; day: number; month: string; weekday: string; closed: boolean; isToday: boolean };
+type DateCell = { iso: string; day: number; month: string; weekday: string; isToday: boolean };
 
-function buildDates(count: number): DemoDate[] {
+function buildDates(count: number): DateCell[] {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  return Array.from({ length: count }).map((_, i): DemoDate => {
+  return Array.from({ length: count }).map((_, i): DateCell => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const dow = d.getDay();
     return {
-      iso: toLocalIso(d),
-      day: d.getDate(),
-      month: MONTH_LABELS[d.getMonth()]!,
-      weekday: DAY_LABELS[dow]!,
-      closed: dow === 0,
-      isToday: i === 0,
+      iso:      toLocalIso(d),
+      day:      d.getDate(),
+      month:    MONTH_LABELS[d.getMonth()]!,
+      weekday:  DAY_LABELS[d.getDay()]!,
+      isToday:  i === 0,
     };
   });
 }
 
-function buildSlots() {
-  const out: { short: string; label: string }[] = [];
-  for (let h = 9; h < 19; h++) {
-    for (const m of [0, 30]) {
-      const ampm = h >= 12 ? "PM" : "AM";
-      const hour12 = h > 12 ? h - 12 : h;
-      out.push({
-        short: `${String(h).padStart(2, "0")}:${m === 0 ? "00" : "30"}`,
-        label: `${hour12}:${m === 0 ? "00" : "30"} ${ampm}`,
-      });
-    }
-  }
-  return out;
+function digitsOnly(s: string): string { return s.replace(/\D/g, ""); }
+
+function fmtSlot(short: string): string {
+  // "10:30" → "10:30 AM"
+  const [hStr, mStr] = short.split(":");
+  const h = Number(hStr ?? 0);
+  const m = Number(mStr ?? 0);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-function digitsOnly(s: string) {
-  return s.replace(/\D/g, "");
-}
+// =============================================================================
+// Component
+// =============================================================================
 
 type Props = {
   trigger: React.ReactNode;
@@ -117,28 +115,39 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const [bookedSlots, setBookedSlots] = useState<Set<string>>(new Set());
-  const [slotsLoading, setSlotsLoading] = useState(false);
 
-  const services       = lookups.services;
-  const doctors        = lookups.doctors;
-  const recentPatients = lookups.recentPatients;
+  // Slot picker state — populated from server actions, varies per mode.
+  const [workingWindows, setWorkingWindows] = useState<WorkingWindow[]>([]);
+  const [bookedSlots,    setBookedSlots]    = useState<Set<string>>(new Set());
+  const [deptFreeSlots,  setDeptFreeSlots]  = useState<Set<string>>(new Set());
+  const [slotsLoading,   setSlotsLoading]   = useState(false);
 
-  const dates = useMemo(() => buildDates(7), []);
-  const slots = useMemo(buildSlots, []);
-  const firstOpenIso = dates.find((d) => !d.closed)?.iso ?? dates[0]!.iso;
+  // Doctor dropdown state — for By-Dept flow, populated after slot pick.
+  type SlotDoctor = { id: string; displayName: string; qualifications: string | null };
+  const [slotDoctors, setSlotDoctors] = useState<SlotDoctor[]>([]);
+  const [doctorsLoading, setDoctorsLoading] = useState(false);
+
+  // Working-dates set for By-Doctor flow — greys out non-working dates.
+  const [workingDates, setWorkingDates] = useState<Set<string> | null>(null);
+
+  const departments = lookups.departments;
+  const doctors     = lookups.doctors;
+
+  const dates = useMemo(() => buildDates(DATE_RANGE_DAYS), []);
+  const firstIso = dates[0]!.iso;
 
   const defaultValues: ApptFormValues = useMemo(() => ({
     selectedPatientId: null,
     phone:             "",
     name:              "",
-    serviceId:         services[0]?.id ?? "",
-    doctorId:          doctors[0]?.id ?? "",
-    dateIso:           firstOpenIso,
+    mode:              "byDoctor",
+    departmentId:      null,
+    doctorId:          doctors[0]?.id ?? null,
+    dateIso:           firstIso,
     slot:              null,
     sendWhatsApp:      true,
     notes:             "",
-  }), [services, doctors, firstOpenIso]);
+  }), [doctors, firstIso]);
 
   const {
     register,
@@ -153,70 +162,119 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
     mode:          "onSubmit",
   });
 
-  // Live derived state via watch
   const phone             = watch("phone");
   const name              = watch("name");
   const selectedPatientId = watch("selectedPatientId");
-  const serviceId         = watch("serviceId");
+  const mode              = watch("mode");
+  const departmentId      = watch("departmentId");
   const doctorId          = watch("doctorId");
   const dateIso           = watch("dateIso");
   const slot              = watch("slot");
   const sendWhatsApp      = watch("sendWhatsApp");
-  const notes             = watch("notes");
 
   const phoneDigits = digitsOnly(phone);
-  const matches = useMemo(() => {
-    if (phoneDigits.length < 2) return [];
-    return recentPatients.filter((p) =>
-      digitsOnly(p.phone).includes(phoneDigits),
-    );
-  }, [phoneDigits, recentPatients]);
-
-  const selected: RecentPatient | null = useMemo(
-    () => recentPatients.find((p) => p.id === selectedPatientId) ?? null,
-    [recentPatients, selectedPatientId],
+  const selected = useMemo(
+    () => (selectedPatientId
+      ? { id: selectedPatientId, name: name || "Patient", phone, initials: name.slice(0, 2).toUpperCase() }
+      : null),
+    [selectedPatientId, name, phone],
   );
-
   const isExistingPatient = selected !== null;
   const isNewPatientReady = !isExistingPatient && phoneDigits.length === 10 && name.trim().length >= 2;
   const patientReady = isExistingPatient || isNewPatientReady;
-  const canSubmit = patientReady && Boolean(slot);
 
-  // Refresh the taken-slots set whenever doctor or date changes (or the
-  // dialog opens with a default doctor+date). Skipped when no doctor is
-  // selected — the picker stays open in that edge case.
+  // -----------------------------------------------------------------------
+  // Effects: load slot/doctor data as user picks options.
+  // -----------------------------------------------------------------------
+
+  // By-Doctor: working dates → grey out non-working days.
   useEffect(() => {
-    if (!open || !doctorId || !dateIso) return;
+    if (!open || mode !== "byDoctor" || !doctorId) { setWorkingDates(null); return; }
+    let cancelled = false;
+    getDoctorWorkingDatesAction({ doctorId, fromIso: firstIso, days: DATE_RANGE_DAYS })
+      .then((r) => { if (!cancelled && r.ok) setWorkingDates(new Set(r.workingDates)); });
+    return () => { cancelled = true; };
+  }, [open, mode, doctorId, firstIso]);
+
+  // By-Doctor: slots for the chosen doctor+date.
+  useEffect(() => {
+    if (!open || mode !== "byDoctor" || !doctorId || !dateIso) return;
     let cancelled = false;
     setSlotsLoading(true);
-    getBookedSlotsAction({ doctorId, dateIso })
-      .then((result) => {
+    getDoctorSlotsForDateAction({ doctorId, dateIso })
+      .then((r) => {
         if (cancelled) return;
-        if (result.ok) setBookedSlots(new Set(result.slots));
-        else           setBookedSlots(new Set());
+        if (r.ok) {
+          setWorkingWindows(r.workingWindows);
+          setBookedSlots(new Set(r.bookedSlots));
+        } else {
+          setWorkingWindows([]);
+          setBookedSlots(new Set());
+        }
       })
-      .finally(() => {
-        if (!cancelled) setSlotsLoading(false);
-      });
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
     return () => { cancelled = true; };
-  }, [open, doctorId, dateIso]);
+  }, [open, mode, doctorId, dateIso]);
+
+  // By-Dept: free slots (union across all dept doctors) for the chosen dept+date.
+  useEffect(() => {
+    if (!open || mode !== "byDept" || !departmentId || !dateIso) { setDeptFreeSlots(new Set()); return; }
+    let cancelled = false;
+    setSlotsLoading(true);
+    getDeptSlotsForDateAction({ departmentId, dateIso })
+      .then((r) => {
+        if (cancelled) return;
+        if (r.ok) setDeptFreeSlots(new Set(r.freeSlots));
+        else      setDeptFreeSlots(new Set());
+      })
+      .finally(() => { if (!cancelled) setSlotsLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, mode, departmentId, dateIso]);
+
+  // By-Dept: doctors free at the picked slot.
+  useEffect(() => {
+    if (!open || mode !== "byDept" || !departmentId || !dateIso || !slot) {
+      setSlotDoctors([]);
+      return;
+    }
+    let cancelled = false;
+    setDoctorsLoading(true);
+    getDoctorsForSlotAction({ departmentId, dateIso, slot })
+      .then((r) => {
+        if (cancelled) return;
+        if (r.ok) setSlotDoctors(r.doctors);
+        else      setSlotDoctors([]);
+      })
+      .finally(() => { if (!cancelled) setDoctorsLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, mode, departmentId, dateIso, slot]);
+
+  // Reset slot + doctor when mode changes.
+  useEffect(() => {
+    setValue("slot", null,  { shouldValidate: false });
+    setValue("doctorId", mode === "byDoctor" ? (doctors[0]?.id ?? null) : null, { shouldValidate: false });
+    setValue("departmentId", null, { shouldValidate: false });
+    setSlotDoctors([]);
+    setWorkingWindows([]);
+    setBookedSlots(new Set());
+    setDeptFreeSlots(new Set());
+    setWorkingDates(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  // -----------------------------------------------------------------------
+  // Submit
+  // -----------------------------------------------------------------------
 
   const reset = () => {
     resetForm(defaultValues);
     setConfirmed(false);
     setSubmitError(null);
-  };
-
-  const handleSelectPatient = (p: RecentPatient) => {
-    setValue("selectedPatientId", p.id, { shouldValidate: false });
-    setValue("phone", p.phone,           { shouldValidate: false });
-    setValue("name",  p.name,            { shouldValidate: false });
-  };
-
-  const handleClearPatient = () => {
-    setValue("selectedPatientId", null, { shouldValidate: false });
-    setValue("phone", "",               { shouldValidate: false });
-    setValue("name",  "",               { shouldValidate: false });
+    setSlotDoctors([]);
+    setWorkingWindows([]);
+    setBookedSlots(new Set());
+    setDeptFreeSlots(new Set());
+    setWorkingDates(null);
   };
 
   const onSubmit = (values: ApptFormValues) => {
@@ -225,23 +283,25 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
 
     const startsAtIso = `${values.dateIso}T${values.slot ?? "00:00"}:00+05:30`;
     const e164        = `+91${digitsOnly(values.phone)}`;
+    // Pass the slot length so the server can compute ends_at without a service.
+    // By-Doctor flow: read from the working window covering this slot.
+    // By-Dept flow: no precise window known here; let the server default (30).
+    const slotMinutes =
+      mode === "byDoctor"
+        ? workingWindows.find((w) => values.slot && w.start <= values.slot && values.slot < w.end)?.slotMinutes
+        : undefined;
 
     startTransition(async () => {
       const result = await createAppointmentAction({
         ...(values.selectedPatientId
           ? { patientId: values.selectedPatientId }
-          : {
-              patient: {
-                fullName:  values.name.trim(),
-                phoneE164: e164,
-                language:  "en",
-              },
-            }),
-        doctorId:     values.doctorId,
-        serviceId:    values.serviceId,
-        startsAt:     startsAtIso,
-        notes:        values.notes.trim() || undefined,
-        sendWhatsApp: values.sendWhatsApp,
+          : { patient: { fullName: values.name.trim(), phoneE164: e164, language: "en" } }),
+        doctorId:        values.doctorId!,
+        departmentId:    values.departmentId ?? undefined,
+        startsAt:        startsAtIso,
+        durationMinutes: slotMinutes,
+        notes:           values.notes.trim() || undefined,
+        sendWhatsApp:    values.sendWhatsApp,
       });
 
       if (!result.ok) {
@@ -254,19 +314,40 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
     });
   };
 
-  const service = services.find((s) => s.id === serviceId) ?? services[0];
-  const doctor  = doctors.find((d) => d.id === doctorId)   ?? doctors[0];
+  // -----------------------------------------------------------------------
+  // Derived display data
+  // -----------------------------------------------------------------------
+
+  const doctor = mode === "byDept"
+    ? slotDoctors.find((d) => d.id === doctorId)
+    : doctors.find((d) => d.id === doctorId);
+  const doctorName = doctor
+    ? ("name" in doctor ? doctor.name : doctor.displayName)
+    : "—";
   const patientName = selected ? selected.name : name.trim() || "this patient";
+  const department  = departments.find((d) => d.id === departmentId);
+
+  // Slot grid candidates:
+  //   By-Doctor: every slot inside workingWindows, with bookedSlots greyed.
+  //   By-Dept:   the freeSlots set from server.
+  const slotCandidates = useMemo(() => {
+    if (mode === "byDoctor") {
+      return slotsInWindows(workingWindows);
+    }
+    return Array.from(deptFreeSlots).sort();
+  }, [mode, workingWindows, deptFreeSlots]);
+
+  const availableSlots = useMemo(() => {
+    if (mode === "byDoctor") return subtractBooked(slotCandidates, bookedSlots);
+    return slotCandidates;
+  }, [mode, slotCandidates, bookedSlots]);
 
   return (
     <Dialog.Root
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
-        if (!v) {
-          // Defer reset so the closing animation isn't jarring.
-          window.setTimeout(reset, 200);
-        }
+        if (!v) window.setTimeout(reset, 200);
       }}
     >
       <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
@@ -278,8 +359,7 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
               patientName={patientName}
               dateIso={dateIso}
               slotShort={slot!}
-              serviceName={service?.name ?? "—"}
-              doctorName={doctor?.name ?? "—"}
+              doctorName={doctorName}
               sendWhatsApp={sendWhatsApp}
               onClose={() => setOpen(false)}
               onAnother={() => {
@@ -293,9 +373,7 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
               {/* Header */}
               <div className="flex items-start justify-between gap-3 border-b border-border bg-white px-5 py-4">
                 <div>
-                  <Dialog.Title className="text-[18px] font-semibold text-heading">
-                    New appointment
-                  </Dialog.Title>
+                  <Dialog.Title className="text-[18px] font-semibold text-heading">New appointment</Dialog.Title>
                   <Dialog.Description className="mt-0.5 text-[12px] text-muted">
                     Booking on behalf of a patient who called or walked in.
                   </Dialog.Description>
@@ -308,25 +386,23 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                 </Dialog.Close>
               </div>
 
-              {/* Body — single scrollable column so the form fits any height */}
+              {/* Body */}
               <div className="flex-1 overflow-y-auto px-5 py-4 md:px-6">
                 {/* Patient */}
                 <Section label="Patient" required>
                   {isExistingPatient ? (
                     <div className="flex items-center gap-3 rounded-md border border-[#3a8b5e] bg-[#E6F4EC] px-3 py-2.5">
-                      <span
-                        className="grid h-9 w-9 flex-none place-items-center rounded-pill text-[12px] font-semibold"
-                        style={{ background: selected!.bg, color: selected!.fg }}
-                      >
-                        {selected!.initials}
-                      </span>
                       <div className="min-w-0 flex-1">
                         <div className="text-[14px] font-semibold text-heading">{selected!.name}</div>
-                        <div className="text-[12px] text-muted">+91 {selected!.phone} · {selected!.lang}</div>
+                        <div className="text-[12px] text-muted">+91 {selected!.phone}</div>
                       </div>
                       <button
                         type="button"
-                        onClick={handleClearPatient}
+                        onClick={() => {
+                          setValue("selectedPatientId", null, { shouldValidate: false });
+                          setValue("phone", "",               { shouldValidate: false });
+                          setValue("name",  "",               { shouldValidate: false });
+                        }}
                         className="rounded-md border border-border bg-white px-2.5 py-1 text-[12px] text-muted hover:text-heading"
                       >
                         Change
@@ -348,75 +424,11 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                         />
                       </div>
 
-                      {/* Quick-select chips for recently-added patients.
-                          Click one to fill the form instead of retyping the phone
-                          number. Hidden once the user starts typing. */}
-                      {phoneDigits.length < 2 && recentPatients.length > 0 && (
-                        <>
-                          <div className="mt-3 flex items-baseline gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">
-                              Recent patients
-                            </span>
-                            <span className="text-[11px] text-[#9aa9b8]">
-                              · tap to pre-fill
-                            </span>
-                          </div>
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {recentPatients.slice(0, 4).map((p) => (
-                              <button
-                                key={p.id}
-                                type="button"
-                                onClick={() => handleSelectPatient(p)}
-                                className="inline-flex items-center gap-2 rounded-pill border border-border bg-white px-2 py-1 text-[12px] text-heading hover:border-link-hover"
-                              >
-                                <span
-                                  className="grid h-6 w-6 flex-none place-items-center rounded-pill text-[10px] font-semibold"
-                                  style={{ background: p.bg, color: p.fg }}
-                                >
-                                  {p.initials}
-                                </span>
-                                {p.name}
-                              </button>
-                            ))}
-                          </div>
-                        </>
-                      )}
-
-                      {/* Live matches */}
-                      {matches.length > 0 && (
-                        <div className="mt-2 overflow-hidden rounded-md border border-border bg-white">
-                          {matches.map((p, i) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => handleSelectPatient(p)}
-                              className={
-                                "flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-muted " +
-                                (i < matches.length - 1 ? "border-b border-border" : "")
-                              }
-                            >
-                              <span
-                                className="grid h-9 w-9 flex-none place-items-center rounded-pill text-[12px] font-semibold"
-                                style={{ background: p.bg, color: p.fg }}
-                              >
-                                {p.initials}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[14px] font-semibold text-heading">{p.name}</div>
-                                <div className="font-mono text-[11px] text-[#9aa9b8]">{p.id} · +91 {p.phone}</div>
-                              </div>
-                              <i className="fas fa-arrow-right text-[10px] text-muted" />
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* No match — inline create */}
-                      {phoneDigits.length >= 2 && matches.length === 0 && (
+                      {phoneDigits.length >= 2 && (
                         <div className="mt-2 rounded-md border border-dashed border-[#cdd9e4] bg-surface-muted p-3">
                           <div className="text-[12px] text-muted">
                             <i className="fas fa-user-plus mr-1.5 text-link-hover" />
-                            No match. Create new patient:
+                            New patient — enter their name:
                           </div>
                           <input
                             type="text"
@@ -426,8 +438,7 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                           />
                           {errors.name?.message && (
                             <div className="mt-1 text-[11px] text-danger">
-                              <i className="fas fa-exclamation-circle mr-1" />
-                              {errors.name.message}
+                              <i className="fas fa-exclamation-circle mr-1" /> {errors.name.message}
                             </div>
                           )}
                           {phoneDigits.length > 0 && phoneDigits.length < 10 && (
@@ -442,52 +453,93 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                   )}
                 </Section>
 
-                {/* Service & Doctor — inline row */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <Section label="Service" required>
+                {/* Mode toggle */}
+                <Section label="Book by">
+                  <div className="inline-flex rounded-md border border-border bg-white p-0.5">
+                    {(["byDoctor", "byDept"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setValue("mode", m, { shouldValidate: false })}
+                        className={
+                          "rounded-sm px-3 py-1.5 text-[12px] font-medium transition-colors " +
+                          (mode === m
+                            ? "bg-brand text-white"
+                            : "text-muted hover:text-heading")
+                        }
+                      >
+                        <i className={`fas ${m === "byDoctor" ? "fa-user-md" : "fa-sitemap"} mr-1.5 text-[11px]`} />
+                        {m === "byDoctor" ? "By doctor" : "By department"}
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+
+                {/* Department or Doctor first */}
+                {mode === "byDept" ? (
+                  <Section label="Department" required>
                     <select
-                      {...register("serviceId")}
+                      value={departmentId ?? ""}
+                      onChange={(e) => {
+                        setValue("departmentId", e.target.value || null, { shouldValidate: false });
+                        setValue("slot",        null,                    { shouldValidate: false });
+                        setValue("doctorId",    null,                    { shouldValidate: false });
+                      }}
                       className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
                     >
-                      {services.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} · {s.durationMinutes} min · {s.feeLabel}
-                        </option>
+                      <option value="">— Pick a department —</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
+                    {errors.departmentId?.message && (
+                      <p className="mt-1 text-[11px] text-danger">{errors.departmentId.message}</p>
+                    )}
                   </Section>
-                  <Section label="Doctor">
+                ) : (
+                  <Section label="Doctor" required>
                     <select
-                      {...register("doctorId")}
+                      value={doctorId ?? ""}
+                      onChange={(e) => {
+                        setValue("doctorId", e.target.value || null, { shouldValidate: false });
+                        setValue("slot",     null,                   { shouldValidate: false });
+                      }}
                       className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
                     >
+                      <option value="">— Pick a doctor —</option>
                       {doctors.map((d) => (
                         <option key={d.id} value={d.id}>
-                          {d.name} — {d.credential}
+                          {d.name}{d.credential ? ` — ${d.credential}` : ""}
                         </option>
                       ))}
                     </select>
+                    {errors.doctorId?.message && (
+                      <p className="mt-1 text-[11px] text-danger">{errors.doctorId.message}</p>
+                    )}
                   </Section>
-                </div>
+                )}
 
-                {/* Date strip */}
+                {/* When — 30-day date row */}
                 <Section label="When" required>
                   <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
                     {dates.map((d) => {
                       const sel = d.iso === dateIso;
+                      // By-Doctor: grey out days the doctor isn't working.
+                      // By-Dept (or before doctor pick): everything clickable.
+                      const isOff = mode === "byDoctor" && workingDates !== null && !workingDates.has(d.iso);
                       return (
                         <button
                           key={d.iso}
                           type="button"
-                          disabled={d.closed}
+                          disabled={isOff}
                           onClick={() => {
                             setValue("dateIso", d.iso, { shouldValidate: false });
                             setValue("slot",    null,  { shouldValidate: false });
                           }}
                           className={
                             "relative flex w-[60px] flex-none flex-col items-center rounded-md border-[1.5px] py-1.5 transition-colors " +
-                            (d.closed
-                              ? "cursor-not-allowed border-border bg-white text-[#cdd9e4] line-through"
+                            (isOff
+                              ? "cursor-not-allowed border-border bg-white text-[#cdd9e4]"
                               : sel
                                 ? "border-cta bg-cta text-white"
                                 : "border-border bg-white text-heading hover:border-link-hover")
@@ -510,47 +562,84 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                   {slotsLoading && (
                     <p className="mt-3 text-[11px] text-[#9aa9b8]">
                       <i className="fas fa-spinner fa-spin mr-1.5" />
-                      Checking which slots are still open…
+                      Loading available slots…
                     </p>
                   )}
-                  <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-5">
-                    {slots.map((s) => {
-                      const isLunch = LUNCH_SLOTS.has(s.short);
-                      const isBooked = bookedSlots.has(s.short);
-                      const isSel = s.short === slot;
-                      if (isLunch) {
+                  {!slotsLoading && slotCandidates.length === 0 && (
+                    <p className="mt-3 rounded-md border border-dashed border-border bg-surface-muted px-3 py-4 text-center text-[12px] text-muted">
+                      {mode === "byDept" && !departmentId
+                        ? "Pick a department to see available slots."
+                        : mode === "byDoctor" && !doctorId
+                        ? "Pick a doctor to see available slots."
+                        : "No working slots on this day."}
+                    </p>
+                  )}
+                  {!slotsLoading && slotCandidates.length > 0 && (
+                    <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+                      {slotCandidates.map((s) => {
+                        const isBooked = mode === "byDoctor" && bookedSlots.has(s);
+                        const isUsable = !isBooked && (mode === "byDept" ? deptFreeSlots.has(s) : true);
+                        const isSel = s === slot;
                         return (
-                          <span
-                            key={s.short}
-                            className="grid place-items-center rounded-md border border-dashed border-border bg-surface-muted py-1.5 text-[10px] text-[#9aa9b8]"
+                          <button
+                            key={s}
+                            type="button"
+                            disabled={!isUsable}
+                            onClick={() => {
+                              setValue("slot", s, { shouldValidate: true });
+                              if (mode === "byDept") {
+                                setValue("doctorId", null, { shouldValidate: false });
+                              }
+                            }}
+                            className={
+                              "rounded-md border-[1.5px] py-1.5 text-[12px] font-medium transition-colors " +
+                              (!isUsable
+                                ? "cursor-not-allowed border-border bg-[#F4F5F7] text-[#9aa9b8] line-through"
+                                : isSel
+                                  ? "border-cta bg-cta text-white shadow-sm"
+                                  : "border-border bg-white text-heading hover:border-link-hover")
+                            }
                           >
-                            <i className="fas fa-utensils mr-0.5" /> Lunch
-                          </span>
+                            {fmtSlot(s)}
+                          </button>
                         );
-                      }
-                      return (
-                        <button
-                          key={s.short}
-                          type="button"
-                          disabled={isBooked}
-                          onClick={() => setValue("slot", s.short, { shouldValidate: true })}
-                          className={
-                            "rounded-md border-[1.5px] py-1.5 text-[12px] font-medium transition-colors " +
-                            (isBooked
-                              ? "cursor-not-allowed border-border bg-[#F4F5F7] text-[#9aa9b8] line-through"
-                              : isSel
-                                ? "border-cta bg-cta text-white shadow-sm"
-                                : "border-border bg-white text-heading hover:border-link-hover")
-                          }
-                        >
-                          {s.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                      })}
+                    </div>
+                  )}
                 </Section>
 
-                {/* Notification toggle */}
+                {/* By-Dept: doctor dropdown appears after slot pick */}
+                {mode === "byDept" && slot && (
+                  <Section label="Doctor" required>
+                    {doctorsLoading ? (
+                      <div className="text-[12px] text-muted">
+                        <i className="fas fa-spinner fa-spin mr-1.5" /> Finding available doctors…
+                      </div>
+                    ) : slotDoctors.length === 0 ? (
+                      <div className="rounded-md border border-dashed border-border bg-surface-muted px-3 py-3 text-[12px] text-muted">
+                        No doctor in {department?.name ?? "this department"} is free at {fmtSlot(slot)}. Pick a different slot.
+                      </div>
+                    ) : (
+                      <select
+                        value={doctorId ?? ""}
+                        onChange={(e) => setValue("doctorId", e.target.value || null, { shouldValidate: false })}
+                        className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
+                      >
+                        <option value="">— Pick a doctor —</option>
+                        {slotDoctors.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.displayName}{d.qualifications ? ` — ${d.qualifications}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {errors.doctorId?.message && (
+                      <p className="mt-1 text-[11px] text-danger">{errors.doctorId.message}</p>
+                    )}
+                  </Section>
+                )}
+
+                {/* Notify */}
                 <Section label="Notify patient">
                   <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border bg-white p-3">
                     <input
@@ -561,8 +650,7 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                     <span className="text-[13px] leading-5 text-heading">
                       <strong className="font-semibold">Send WhatsApp confirmation</strong>{" "}
                       <span className="text-muted">
-                        — booking_confirmation_v1 template, with the slot, doctor and clinic
-                        address. Reply YES to lock it in.
+                        — booking_confirmation_v1 template with the slot, doctor and clinic address.
                       </span>
                     </span>
                   </label>
@@ -581,28 +669,23 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
 
               {/* Footer */}
               <div className="flex items-center gap-2.5 border-t border-border bg-surface-muted px-5 py-3.5">
-                <Dialog.Close
-                  className="cursor-pointer rounded-md border border-border bg-white px-4 py-2 text-[13px] font-medium text-muted"
-                >
+                <Dialog.Close className="cursor-pointer rounded-md border border-border bg-white px-4 py-2 text-[13px] font-medium text-muted">
                   Cancel
                 </Dialog.Close>
                 <div className="ml-auto flex items-center gap-3">
                   {!patientReady && (
                     <span className="hidden text-[12px] text-[#9aa9b8] sm:inline">
-                      <i className="fas fa-info-circle mr-1" />
-                      Pick or create a patient first
+                      <i className="fas fa-info-circle mr-1" /> Pick or create a patient first
                     </span>
                   )}
                   {patientReady && !slot && !submitError && (
                     <span className="hidden text-[12px] text-[#9aa9b8] sm:inline">
-                      <i className="fas fa-info-circle mr-1" />
-                      Pick a time slot
+                      <i className="fas fa-info-circle mr-1" /> Pick a time slot
                     </span>
                   )}
                   {submitError && (
                     <span role="alert" className="text-[12px] text-danger">
-                      <i className="fas fa-exclamation-triangle mr-1" />
-                      {submitError}
+                      <i className="fas fa-exclamation-triangle mr-1" /> {submitError}
                     </span>
                   )}
                   <button
@@ -614,15 +697,9 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                     }
                   >
                     {isPending ? (
-                      <>
-                        <i className="fas fa-spinner fa-spin text-[12px]" />
-                        Booking…
-                      </>
+                      <><i className="fas fa-spinner fa-spin text-[12px]" /> Booking…</>
                     ) : (
-                      <>
-                        <i className="fas fa-calendar-check text-[12px]" />
-                        Confirm booking
-                      </>
+                      <><i className="fas fa-calendar-check text-[12px]" /> Confirm booking</>
                     )}
                   </button>
                 </div>
@@ -634,6 +711,10 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
     </Dialog.Root>
   );
 }
+
+// =============================================================================
+// Small bits
+// =============================================================================
 
 function Section({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
@@ -651,20 +732,18 @@ function ConfirmedView({
   patientName,
   dateIso,
   slotShort,
-  serviceName,
   doctorName,
   sendWhatsApp,
   onClose,
   onAnother,
 }: {
-  patientName: string;
-  dateIso: string;
-  slotShort: string;
-  serviceName: string;
-  doctorName: string;
+  patientName:  string;
+  dateIso:      string;
+  slotShort:    string;
+  doctorName:   string;
   sendWhatsApp: boolean;
-  onClose: () => void;
-  onAnother: () => void;
+  onClose:      () => void;
+  onAnother:    () => void;
 }) {
   return (
     <div className="px-6 py-8 text-center">
@@ -673,22 +752,15 @@ function ConfirmedView({
       </div>
       <h3 className="mt-3 text-[20px] font-semibold text-heading">Booking confirmed</h3>
       <p className="mt-1.5 text-[14px] leading-[20px] text-muted">
-        <strong className="text-heading">{patientName}</strong> is booked for{" "}
-        <strong className="text-heading">{serviceName}</strong> with{" "}
+        <strong className="text-heading">{patientName}</strong> is booked with{" "}
         <strong className="text-heading">{doctorName}</strong> on{" "}
         <strong className="text-heading">{formatLongDate(dateIso)} · {formatSlotLabel(slotShort)}</strong>.
       </p>
       <div className="mt-3 inline-flex items-center gap-2 rounded-pill bg-surface-muted px-3 py-1 text-[12px] text-muted">
         {sendWhatsApp ? (
-          <>
-            <i className="fab fa-whatsapp text-[#25D366]" />
-            WhatsApp template queued — patient will see it shortly.
-          </>
+          <><i className="fab fa-whatsapp text-[#25D366]" /> WhatsApp template queued — patient will see it shortly.</>
         ) : (
-          <>
-            <i className="fas fa-bell-slash" />
-            No automated message sent (per your toggle).
-          </>
+          <><i className="fas fa-bell-slash" /> No automated message sent (per your toggle).</>
         )}
       </div>
 

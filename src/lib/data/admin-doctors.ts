@@ -105,6 +105,8 @@ type DoctorRow = {
   visiting_note:      string | null;
   status:             string | null;
   languages:          string[] | null;
+  // Added in migration 0010
+  department_id:      string | null;
 };
 
 const VALID_SPECIALTIES = new Set<Specialty>([
@@ -142,7 +144,7 @@ async function getLiveDoctors(): Promise<Doctor[]> {
     supabase
       .from("doctors")
       .select(
-        "id, display_name, qualifications, bio, photo_url, registration_no, display_order, is_active, created_at, years_experience, trained_at, phone, email, primary_specialty, visiting, visiting_note, status, languages",
+        "id, display_name, qualifications, bio, photo_url, registration_no, display_order, is_active, created_at, years_experience, trained_at, phone, email, primary_specialty, visiting, visiting_note, status, languages, department_id",
       )
       .order("display_order", { ascending: true }),
     supabase
@@ -190,6 +192,7 @@ async function getLiveDoctors(): Promise<Doctor[]> {
         reviewCount:            0,
       },
       reviews: [],
+      departmentId:        r.department_id,
     };
   });
 }

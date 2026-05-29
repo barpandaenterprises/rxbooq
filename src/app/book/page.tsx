@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { BookingLayout } from "@/components/layouts/BookingLayout";
-import { BookingServicePicker } from "@/components/compositions/BookingServicePicker";
+import { BookingComposer } from "@/components/compositions/BookingComposer";
 import { getCurrentClinic } from "@/lib/booking/current-clinic";
-import { getPublicDoctors, getPublicServices } from "@/lib/data/public-booking";
+import { getPublicDepartments, getPublicDoctors } from "@/lib/data/public-booking";
 
 export const metadata = {
   title: "Book a visit",
@@ -12,17 +12,17 @@ export default async function BookPage() {
   const clinic = await getCurrentClinic();
   if (!clinic) notFound();
 
-  const [services, doctors] = await Promise.all([
-    getPublicServices(clinic.id),
+  const [doctors, departments] = await Promise.all([
     getPublicDoctors(clinic.id),
+    getPublicDepartments(clinic.id),
   ]);
 
   return (
     <BookingLayout>
-      <BookingServicePicker
+      <BookingComposer
         clinicName={clinic.name}
-        services={services}
         doctors={doctors}
+        departments={departments}
       />
     </BookingLayout>
   );

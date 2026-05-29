@@ -177,8 +177,7 @@ async function getLiveAdminTodayData(): Promise<AdminTodayData> {
     .select(`
       id, starts_at, status,
       patient:patients ( full_name, phone_e164 ),
-      doctor:doctors  ( display_name ),
-      service:services ( name )
+      doctor:doctors  ( display_name )
     `)
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString())
@@ -198,12 +197,11 @@ async function getLiveAdminTodayData(): Promise<AdminTodayData> {
     // Supabase typing for embedded selects can be union of array/object; coerce.
     const patient = Array.isArray(r.patient) ? r.patient[0] : r.patient;
     const doctor  = Array.isArray(r.doctor)  ? r.doctor[0]  : r.doctor;
-    const service = Array.isArray(r.service) ? r.service[0] : r.service;
     return {
       time:    formatTimeIST(r.starts_at as string),
       name:    patient?.full_name  ?? "Unknown patient",
       phone:   patient?.phone_e164 ?? "",
-      service: service?.name       ?? "—",
+      service: "—",
       doctor:  doctor?.display_name ?? "—",
       status:  dbStatusToUi(r.status as string),
     };

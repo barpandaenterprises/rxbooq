@@ -26,6 +26,7 @@ import { deactivateDoctorAction, reorderDoctorsAction } from "@/app/(clinic-app)
 import { AddDoctorDialog } from "@/components/molecules/AddDoctorDialog";
 import { BlockDatesDialog } from "@/components/molecules/BlockDatesDialog";
 import { EditDoctorDialog } from "@/components/molecules/EditDoctorDialog";
+import type { Department } from "@/lib/data/departments";
 import {
   SPECIALTIES,
   STATUS_META,
@@ -45,7 +46,13 @@ const STATUS_FILTERS: Array<{ value: DoctorStatus | "all"; label: string }> = [
   { value: "inactive", label: "Inactive" },
 ];
 
-export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
+export function AdminDoctors({
+  initialDoctors,
+  departments = [],
+}: {
+  initialDoctors: Doctor[];
+  departments?: Department[];
+}) {
   const router = useRouter();
   // Local order so drag-and-drop feels instant. We sync to the server in the
   // background; on success the router.refresh() pulls the canonical order back.
@@ -187,6 +194,7 @@ export function AdminDoctors({ initialDoctors }: { initialDoctors: Doctor[] }) {
             <i className="fas fa-file-export" /> Export CSV
           </button>
           <AddDoctorDialog
+            departments={departments}
             trigger={
               <button
                 type="button"

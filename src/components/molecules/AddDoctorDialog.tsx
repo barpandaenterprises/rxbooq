@@ -8,6 +8,7 @@ import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { addDoctorAction, type AddDoctorScheduleRow } from "@/app/(clinic-app)/admin/doctors/actions";
 import { DoctorPhotoField, fileToDataUrl } from "@/components/molecules/DoctorPhotoField";
+import type { Department } from "@/lib/data/departments";
 import {
   SPECIALTIES,
   WEEKDAYS,
@@ -21,6 +22,7 @@ import {
 
 type Props = {
   trigger: React.ReactNode;
+  departments?: Department[];
 };
 
 const DEFAULT_RANGE = { start: "09:00", end: "18:00" };
@@ -57,6 +59,7 @@ const doctorFormSchema = z.object({
       (v) => !v || (/^\d+$/.test(v) && Number(v) >= 0 && Number(v) <= 80),
       "Enter a whole number between 0 and 80",
     ),
+  departmentId:       z.string().uuid().optional().or(z.literal("")),
   primarySpecialty:   z.enum(SPECIALTIES as unknown as [Specialty, ...Specialty[]]),
   trainedAt:          z.string().trim().optional().default(""),
   phone:              z.string().refine(
@@ -85,6 +88,7 @@ const DEFAULT_VALUES: DoctorFormValues = {
   qualifications:     "",
   registrationNumber: "",
   yearsExperience:    "",
+  departmentId:       "",
   primarySpecialty:   "General Dentistry",
   trainedAt:          "",
   phone:              "",
@@ -103,7 +107,7 @@ const DEFAULT_VALUES: DoctorFormValues = {
 // Component
 // =============================================================================
 
-export function AddDoctorDialog({ trigger }: Props) {
+export function AddDoctorDialog({ trigger, departments = [] }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -167,6 +171,7 @@ export function AddDoctorDialog({ trigger }: Props) {
         phone:              phoneDigits ? `+91${phoneDigits}` : null,
         email:              values.email || null,
         primarySpecialty:   values.primarySpecialty,
+        departmentId:       values.departmentId || null,
         visiting:           values.visiting,
         visitingNote:       values.visiting ? (values.visitingNote || null) : null,
         status:             values.status,
@@ -264,6 +269,23 @@ export function AddDoctorDialog({ trigger }: Props) {
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Department" error={errors.departmentId?.message}>
+                    <select
+                      {...register("departmentId")}
+                      className={inputCls(!!errors.departmentId) + " cursor-pointer"}
+                      disabled={departments.length === 0}
+                    >
+                      <option value="">— Unassigned —</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                    {departments.length === 0 && (
+                      <p className="mt-1 text-[11px] text-[#9aa9b8]">
+                        No departments yet — add one in <a href="/admin/settings/departments" className="text-link-hover hover:underline">Settings → Departments</a>.
+                      </p>
+                    )}
+                  </Field>
                   <Field label="Primary specialty">
                     <select
                       {...register("primarySpecialty")}
@@ -272,18 +294,18 @@ export function AddDoctorDialog({ trigger }: Props) {
                       {SPECIALTIES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </Field>
-                  <Field label="Years of experience" error={errors.yearsExperience?.message}>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={80}
-                      {...register("yearsExperience")}
-                      placeholder="12"
-                      className={inputCls(!!errors.yearsExperience)}
-                    />
-                  </Field>
                 </div>
+                <Field label="Years of experience" error={errors.yearsExperience?.message}>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={80}
+                    {...register("yearsExperience")}
+                    placeholder="12"
+                    className={inputCls(!!errors.yearsExperience)}
+                  />
+                </Field>
 
                 <Field label="Trained at" error={errors.trainedAt?.message}>
                   <input

@@ -230,24 +230,22 @@ async function getLiveAnalytics(
   const startMs  = now - days * 86_400_000;
   const prevStartMs = now - 2 * days * 86_400_000;
 
-  // Build the appointments query, applying filter chips at the DB layer.
+  // Build the appointments query, applying the doctor filter at the DB layer.
+  // The serviceId filter is dropped post-redesign (appointments no longer have
+  // a service link). Top-services and revenue KPIs are zeroed below until a
+  // separate billing/department-rollup model lands.
+  void serviceId;
   let apptQ = supabase
     .from("appointments")
-    .select("starts_at, status, source, service:services(name, price_inr), doctor_id, service_id")
+    .select("starts_at, status, source, doctor_id")
     .gte("starts_at", new Date(prevStartMs).toISOString());
-  if (doctorId)  apptQ = apptQ.eq("doctor_id",  doctorId);
-  if (serviceId) apptQ = apptQ.eq("service_id", serviceId);
+  if (doctorId) apptQ = apptQ.eq("doctor_id", doctorId);
 
-  const [{ data: appts }, { data: patients }, { data: services }, { data: doctors }] = await Promise.all([
+  const [{ data: appts }, { data: patients }, { data: doctors }] = await Promise.all([
     apptQ,
     supabase
       .from("patients")
       .select("created_at, language"),
-    supabase
-      .from("services")
-      .select("id, name, is_active")
-      .eq("is_active", true)
-      .order("display_order", { ascending: true }),
     supabase
       .from("doctors")
       .select("id, display_name")
@@ -259,9 +257,6 @@ async function getLiveAnalytics(
     starts_at: string;
     status:    string | null;
     source:    string | null;
-    service:   { name: string | null; price_inr: number | null }
-             | { name: string | null; price_inr: number | null }[]
-             | null;
   };
   const apptRows = (appts ?? []) as ApptRow[];
 
@@ -282,12 +277,11 @@ async function getLiveAnalytics(
   const noShowRate     = bookingsCur  > 0 ? +(noShowCur / bookingsCur * 100).toFixed(1) : 0;
   const noShowRatePrev = bookingsPrev > 0 ? +(noShowPrev / bookingsPrev * 100).toFixed(1) : 0;
 
-  const revCur = apptRows
-    .filter((a) => inCurrent(a.starts_at) && a.status === "completed")
-    .reduce((sum, a) => sum + ((Array.isArray(a.service) ? a.service[0] : a.service)?.price_inr ?? 0), 0);
-  const revPrev = apptRows
-    .filter((a) => inPrev(a.starts_at) && a.status === "completed")
-    .reduce((sum, a) => sum + ((Array.isArray(a.service) ? a.service[0] : a.service)?.price_inr ?? 0), 0);
+  // Revenue used to derive from service.price_inr; with no service link on
+  // appointments it's not computable yet. See admin-patient-chart for the
+  // matching TODO — surface revenue via a billing model later.
+  const revCur  = 0;
+  const revPrev = 0;
 
   const kpis: AnalyticsKpis = {
     newPatients: {
@@ -343,23 +337,10 @@ async function getLiveAnalytics(
   }
 
   // ---- Top services -------------------------------------------------------
-  const serviceNameById = new Map<string, string>();
-  for (const s of services ?? []) serviceNameById.set(s.id, s.name);
-
-  const svcAgg = new Map<string, { conf: number; comp: number }>();
-  for (const a of apptRows) {
-    if (!inCurrent(a.starts_at)) continue;
-    const name = (Array.isArray(a.service) ? a.service[0] : a.service)?.name;
-    if (!name) continue;
-    const cur = svcAgg.get(name) ?? { conf: 0, comp: 0 };
-    if (a.status === "completed") cur.comp++;
-    else if (a.status === "booked" || a.status === "confirmed") cur.conf++;
-    svcAgg.set(name, cur);
-  }
-  const topServices: ServiceBar[] = Array.from(svcAgg.entries())
-    .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => (b.conf + b.comp) - (a.conf + a.comp))
-    .slice(0, 6);
+  // Removed in the Department-first redesign — there's no service link on the
+  // appointment any more. Replace with a per-department breakdown when the
+  // dashboard catches up. For now this widget renders an empty state.
+  const topServices: ServiceBar[] = [];
 
   // ---- Language mix ------------------------------------------------------
   const langCount = { Odia: 0, Hindi: 0, English: 0 };
@@ -419,7 +400,7 @@ async function getLiveAnalytics(
     windowEnd:        windowEndIso,
     filters:          { doctorId, serviceId },
     doctorOptions:    (doctors ?? []).map((d) => ({ id: d.id, label: d.display_name })),
-    serviceOptions:   (services ?? []).map((s) => ({ id: s.id, label: s.name })),
+    serviceOptions:   [],   // service filter retired with the schema drop
     kpis,
     bookingTimeline:  points,
     topServices,

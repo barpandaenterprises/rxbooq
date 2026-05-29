@@ -154,7 +154,7 @@ async function getLivePatientChart(patientId: string): Promise<Chart | null> {
       .eq("patient_id", patientId)
       .maybeSingle(),
     supabase.from("appointments")
-      .select("id, starts_at, status, service:services(name, duration_minutes), doctor:doctors(display_name)")
+      .select("id, starts_at, ends_at, status, doctor:doctors(display_name)")
       .eq("patient_id", patientId)
       .order("starts_at", { ascending: false }),
     supabase.from("visit_notes")
@@ -318,22 +318,26 @@ async function getLivePatientChart(patientId: string): Promise<Chart | null> {
   type ApptRow = {
     id: string;
     starts_at: string;
+    ends_at:   string;
     status: string | null;
-    service: { name: string | null; duration_minutes: number | null } | { name: string | null; duration_minutes: number | null }[] | null;
-    doctor:  { display_name: string | null } | { display_name: string | null }[] | null;
+    doctor: { display_name: string | null } | { display_name: string | null }[] | null;
   };
   const visits: Visit[] = ((apptRows ?? []) as ApptRow[]).map((a): Visit => {
-    const svc = Array.isArray(a.service) ? a.service[0] : a.service;
     const doc = Array.isArray(a.doctor)  ? a.doctor[0]  : a.doctor;
+    const startMs = new Date(a.starts_at).getTime();
+    const endMs   = new Date(a.ends_at).getTime();
+    const durationMinutes = Number.isFinite(startMs) && Number.isFinite(endMs)
+      ? Math.max(15, Math.round((endMs - startMs) / 60_000))
+      : 30;
     return {
       appointment: {
         id:              a.id,
         patientId,
         date:            (a.starts_at ?? "").slice(0, 10),
-        service:         svc?.name ?? "—",
+        service:         "—",
         doctor:          doc?.display_name ?? "—",
         status:          dbVisitStatus(a.status),
-        durationMinutes: svc?.duration_minutes ?? 30,
+        durationMinutes,
       },
       note:            notesByAppt.get(a.id),
       prescriptions:   prescriptionsByAppt.get(a.id) ?? [],
@@ -361,28 +365,12 @@ async function getLivePatientChart(patientId: string): Promise<Chart | null> {
   }));
 
   // ---- Billing --------------------------------------------------------------
-  // For now: lifetime value = sum of price_inr for completed appointments.
-  // Requires a separate query — keep it simple.
-  const { data: billingRows } = await supabase
-    .from("appointments")
-    .select("status, starts_at, service:services(price_inr)")
-    .eq("patient_id", patientId);
-
-  let lifetimeValue = 0;
-  let last90Days    = 0;
-  const cutoff = Date.now() - 90 * 86400000;
-  type BillingApptRow = {
-    status: string | null;
-    starts_at: string;
-    service: { price_inr: number | null } | { price_inr: number | null }[] | null;
-  };
-  for (const b of (billingRows ?? []) as BillingApptRow[]) {
-    if (b.status !== "completed") continue;
-    const svc   = Array.isArray(b.service) ? b.service[0] : b.service;
-    const price = svc?.price_inr ?? 0;
-    lifetimeValue += price;
-    if (new Date(b.starts_at).getTime() >= cutoff) last90Days += price;
-  }
+  // Lifetime value previously summed the service.price_inr for completed
+  // appointments. With the Department-first redesign there's no service link
+  // on the appointment, so revenue lives elsewhere (TODO: appointments.price_inr
+  // or a separate billing table). For now both totals are zero.
+  const lifetimeValue = 0;
+  const last90Days    = 0;
   const receipts = (attachmentsByAppt.get("_unlinked") ?? [])
     .concat(Array.from(attachmentsByAppt.values()).flat())
     .filter((a) => a.kind === "receipt");

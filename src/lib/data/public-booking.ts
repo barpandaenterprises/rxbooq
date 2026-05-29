@@ -20,10 +20,19 @@ export type PublicService = {
 };
 
 export type PublicDoctor = {
-  id:         string;
-  name:       string;
-  credential: string;
-  initials:   string;
+  id:           string;
+  name:         string;
+  credential:   string;
+  initials:     string;
+  /** Added by migration 0010. Null = unassigned (filtered out of By-Dept flow). */
+  departmentId: string | null;
+};
+
+export type PublicDepartment = {
+  id:           string;
+  name:         string;
+  slug:         string;
+  displayOrder: number;
 };
 
 export type DoctorAvailabilityRow = {
@@ -79,7 +88,7 @@ async function getLiveDoctors(clinicId: string): Promise<PublicDoctor[]> {
   const supabase = serviceClient();
   const { data, error } = await supabase
     .from("doctors")
-    .select("id, display_name, qualifications")
+    .select("id, display_name, qualifications, department_id")
     .eq("clinic_id", clinicId)
     .eq("is_active", true)
     .order("display_order", { ascending: true });
@@ -90,11 +99,48 @@ async function getLiveDoctors(clinicId: string): Promise<PublicDoctor[]> {
   }
 
   return (data ?? []).map((d) => ({
-    id:         d.id,
-    name:       d.display_name,
-    credential: d.qualifications ?? "",
-    initials:   initialsOf(d.display_name),
+    id:           d.id,
+    name:         d.display_name,
+    credential:   d.qualifications ?? "",
+    initials:     initialsOf(d.display_name),
+    departmentId: d.department_id ?? null,
   }));
+}
+
+async function getLiveDepartments(clinicId: string): Promise<PublicDepartment[]> {
+  const supabase = serviceClient();
+  const { data, error } = await supabase
+    .from("departments")
+    .select("id, name, slug, display_order")
+    .eq("clinic_id", clinicId)
+    .eq("is_active", true)
+    .order("display_order", { ascending: true })
+    .order("name",          { ascending: true });
+
+  if (error) {
+    console.error("[public-booking] departments query failed:", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((r) => ({
+    id:           r.id,
+    name:         r.name,
+    slug:         r.slug,
+    displayOrder: r.display_order,
+  }));
+}
+
+async function getLiveDefaultServiceId(clinicId: string): Promise<string | null> {
+  const supabase = serviceClient();
+  const { data } = await supabase
+    .from("services")
+    .select("id")
+    .eq("clinic_id", clinicId)
+    .eq("is_active", true)
+    .order("display_order", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 async function getLiveAvailability(clinicId: string, doctorId: string): Promise<DoctorAvailabilityRow[]> {
@@ -174,11 +220,19 @@ const MOCK_SERVICES: PublicService[] = BOOKING_SERVICES.map((s) => ({
 }));
 
 const MOCK_DOCTORS: PublicDoctor[] = BOOKING_DOCTORS.map((d) => ({
-  id:         d.id,
-  name:       d.name,
-  credential: d.credential,
-  initials:   d.initials,
+  id:           d.id,
+  name:         d.name,
+  credential:   d.credential,
+  initials:     d.initials,
+  departmentId: "dept-dental",
 }));
+
+const MOCK_DEPARTMENTS: PublicDepartment[] = [
+  { id: "dept-dental",     name: "Dental",     slug: "dental",     displayOrder: 1 },
+  { id: "dept-psychiatry", name: "Psychiatry", slug: "psychiatry", displayOrder: 2 },
+  { id: "dept-neurology",  name: "Neurology",  slug: "neurology",  displayOrder: 3 },
+  { id: "dept-gynecology", name: "Gynecology", slug: "gynecology", displayOrder: 4 },
+];
 
 // =============================================================================
 // Public entry points
@@ -231,4 +285,20 @@ export async function findPublicDoctorById(
   if (!id) return null;
   const all = await getPublicDoctors(clinicId);
   return all.find((d) => d.id === id) ?? null;
+}
+
+export async function getPublicDepartments(clinicId: string): Promise<PublicDepartment[]> {
+  if (useMockData()) return MOCK_DEPARTMENTS;
+  return getLiveDepartments(clinicId);
+}
+
+/**
+ * Default service for inserts while `appointments.service_id` is still NOT
+ * NULL. Phase 3 drops the column and removes this helper. Returns `null` for
+ * clinics with no active services — callers should reject the booking with a
+ * friendly error.
+ */
+export async function getPublicDefaultServiceId(clinicId: string): Promise<string | null> {
+  if (useMockData()) return MOCK_SERVICES[0]?.id ?? null;
+  return getLiveDefaultServiceId(clinicId);
 }

@@ -52,8 +52,17 @@ export default async function SuccessPage({
   const clinic = await getCurrentClinic();
   if (!clinic) notFound();
 
-  const service = await findPublicServiceById(clinic.id, params.service);
-  if (!service) notFound();
+  // After the Department-first redesign the booking flow no longer carries a
+  // serviceId through the URL. If absent, fall back to a generic consultation
+  // label rather than 404-ing on success.
+  const service = (await findPublicServiceById(clinic.id, params.service)) ?? {
+    id:              "consultation",
+    name:            "Consultation",
+    description:     "",
+    durationMinutes: 30,
+    feeLabel:        "—",
+    icon:            "fa-tooth",
+  };
 
   let doctor = await findPublicDoctorById(clinic.id, params.doctor);
   if (!doctor) {

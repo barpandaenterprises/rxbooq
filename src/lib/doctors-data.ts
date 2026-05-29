@@ -92,6 +92,8 @@ export type Doctor = {
   services: string[];
   stats: DoctorStats;
   reviews: Review[];
+  /** FK to public.departments (added in migration 0010). Null = unassigned. */
+  departmentId?: string | null;
 };
 
 // ---------- Mock catalog ----------

@@ -110,7 +110,6 @@ type DbRow = {
   status:    string | null;
   patient: { full_name: string | null } | { full_name: string | null }[] | null;
   doctor:  { display_name: string | null } | { display_name: string | null }[] | null;
-  service: { name: string | null } | { name: string | null }[] | null;
 };
 
 async function getLiveCalendar(mondayIst: Date): Promise<CalendarAppt[]> {
@@ -122,8 +121,7 @@ async function getLiveCalendar(mondayIst: Date): Promise<CalendarAppt[]> {
     .select(`
       id, starts_at, ends_at, status,
       patient:patients ( full_name ),
-      doctor:doctors  ( display_name ),
-      service:services ( name )
+      doctor:doctors  ( display_name )
     `)
     .gte("starts_at", mondayIst.toISOString())
     .lt("starts_at",  end.toISOString())
@@ -137,14 +135,13 @@ async function getLiveCalendar(mondayIst: Date): Promise<CalendarAppt[]> {
   return (rows ?? []).map((r: DbRow): CalendarAppt => {
     const patient = Array.isArray(r.patient) ? r.patient[0] : r.patient;
     const doctor  = Array.isArray(r.doctor)  ? r.doctor[0]  : r.doctor;
-    const service = Array.isArray(r.service) ? r.service[0] : r.service;
     return {
       id:        r.id,
       dayOffset: dayOffsetFromMondayIst(new Date(r.starts_at), mondayIst),
       start:     timeFormatIst(new Date(r.starts_at)),
       end:       timeFormatIst(new Date(r.ends_at)),
       patient:   patient?.full_name ?? "Unknown",
-      service:   service?.name      ?? "—",
+      service:   "—",
       doctor:    doctor?.display_name ?? "—",
       status:    dbStatusToUi(r.status),
     };

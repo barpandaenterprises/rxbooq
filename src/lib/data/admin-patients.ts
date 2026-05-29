@@ -141,7 +141,6 @@ type DbAppointment = {
   patient_id: string;
   starts_at:  string;
   status:     string;
-  service: { price_inr: number | null } | { price_inr: number | null }[] | null;
 };
 
 async function getLivePatients(): Promise<PatientRow[]> {
@@ -155,7 +154,7 @@ async function getLivePatients(): Promise<PatientRow[]> {
       .order("created_at", { ascending: false }),
     supabase
       .from("appointments")
-      .select("patient_id, starts_at, status, service:services ( price_inr )"),
+      .select("patient_id, starts_at, status"),
   ]);
 
   if (pErr) {
@@ -164,17 +163,14 @@ async function getLivePatients(): Promise<PatientRow[]> {
   }
 
   // Aggregate appointments per patient.
+  // LTV used to sum service.price_inr; without a service link the value is
+  // unknown and reports as 0 until a separate billing model lands.
   type Agg = { visits: number; ltv: number; lastVisit: string };
   const aggByPatient = new Map<string, Agg>();
   for (const a of (apptRows ?? []) as DbAppointment[]) {
     if (!a.patient_id) continue;
     const existing = aggByPatient.get(a.patient_id) ?? { visits: 0, ltv: 0, lastVisit: "" };
     existing.visits += 1;
-    if (a.status === "completed") {
-      const svc = Array.isArray(a.service) ? a.service[0] : a.service;
-      const price = svc?.price_inr ?? 0;
-      existing.ltv += price;
-    }
     const dateIso = (a.starts_at ?? "").slice(0, 10);
     if (dateIso && dateIso > existing.lastVisit) existing.lastVisit = dateIso;
     aggByPatient.set(a.patient_id, existing);
