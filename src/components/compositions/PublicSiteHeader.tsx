@@ -59,6 +59,12 @@ export async function PublicSiteHeader() {
         {/* Desktop right cluster */}
         <div className="ml-auto hidden items-center gap-4 md:flex">
           <Link
+            href="/get-started"
+            className="text-[13px] font-medium text-muted no-underline hover:text-heading"
+          >
+            For clinics
+          </Link>
+          <Link
             href="/book"
             className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-cta px-[18px] py-2 text-[14px] font-medium text-cta-fg no-underline transition-colors hover:bg-[#d92843]"
           >

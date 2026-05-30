@@ -1,10 +1,16 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getSignedInClinicUser, type SignedInClinicUser } from "@/lib/auth/current-user";
 
 export type SuperAdminNavKey =
   | "Clinics"
   | "Onboarding queue"
+  | "Drafts"
+  | "Verifications"
+  | "Plans"
+  | "Subscriptions"
+  | "Coupons"
   | "Usage"
-  | "Billing"
   | "Templates"
   | "Audit log"
   | "Settings";
@@ -16,13 +22,17 @@ const NAV_ITEMS: Array<{
   badge?: string;
   badgeCoral?: boolean;
 }> = [
-  { ic: "fa-building", label: "Clinics", href: "/superadmin/clinics", badge: "12" },
-  { ic: "fa-user-plus", label: "Onboarding queue", href: "/superadmin/clinics/new", badge: "4", badgeCoral: true },
-  { ic: "fa-chart-area", label: "Usage", href: "#" },
-  { ic: "fa-rupee-sign", label: "Billing", href: "#" },
-  { ic: "fa-comment-dots", label: "Templates", href: "#" },
-  { ic: "fa-history", label: "Audit log", href: "#" },
-  { ic: "fa-cog", label: "Settings", href: "#" },
+  { ic: "fa-building",       label: "Clinics",          href: "/superadmin/clinics" },
+  { ic: "fa-user-plus",      label: "Onboarding queue", href: "/superadmin/clinics/new" },
+  { ic: "fa-clipboard-list", label: "Drafts",           href: "/superadmin/applications" },
+  { ic: "fa-shield-alt",     label: "Verifications",    href: "/superadmin/verifications" },
+  { ic: "fa-layer-group",    label: "Plans",            href: "/superadmin/plans" },
+  { ic: "fa-rupee-sign",     label: "Subscriptions",    href: "/superadmin/subscriptions" },
+  { ic: "fa-tag",            label: "Coupons",          href: "/superadmin/coupons" },
+  { ic: "fa-chart-area",     label: "Usage",            href: "#" },
+  { ic: "fa-comment-dots",   label: "Templates",        href: "#" },
+  { ic: "fa-history",        label: "Audit log",        href: "#" },
+  { ic: "fa-cog",            label: "Settings",         href: "#" },
 ];
 
 export function SuperAdminTopBar() {
@@ -72,9 +82,11 @@ export function SuperAdminTopBar() {
   );
 }
 
-function SuperAdminSidebar({ active }: { active: SuperAdminNavKey }) {
+function SuperAdminSidebar({ active, user }: { active: SuperAdminNavKey; user: SignedInClinicUser | null }) {
+  const displayName = user?.displayName ?? "Signed in";
+  const initials    = initialsOf(displayName);
   return (
-    <aside className="hidden w-60 flex-none border-r border-border bg-white p-3 md:block">
+    <aside className="hidden w-60 flex-none flex-col border-r border-border bg-white p-3 md:flex">
       <nav className="flex flex-col gap-0.5">
         {NAV_ITEMS.map((it) => {
           const isActive = it.label === active;
@@ -107,8 +119,34 @@ function SuperAdminSidebar({ active }: { active: SuperAdminNavKey }) {
           );
         })}
       </nav>
+
+      <div className="mt-auto flex items-center gap-2.5 border-t border-border px-2 pt-3.5">
+        <span className="grid h-8 w-8 flex-none place-items-center rounded-pill bg-[#E6F1FA] text-[11px] font-semibold text-link-hover">
+          {initials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-medium text-heading">{displayName}</div>
+          <div className="text-[11px] text-muted">Superadmin</div>
+        </div>
+        <Link
+          href="/logout"
+          prefetch={false}
+          aria-label="Sign out"
+          title="Sign out"
+          className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-surface-muted hover:text-heading"
+        >
+          <i className="fas fa-sign-out-alt text-[13px]" />
+        </Link>
+      </div>
     </aside>
   );
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const a = parts[0]?.[0] ?? "?";
+  const b = parts[1]?.[0] ?? "";
+  return (a + b).toUpperCase();
 }
 
 type Props = {
@@ -118,12 +156,20 @@ type Props = {
   slim?: boolean;
 };
 
-export function SuperAdminLayout({ active, children, slim }: Props) {
+export async function SuperAdminLayout({ active, children, slim }: Props) {
+  // Role gate — middleware already enforces "must be signed in" on /superadmin/*,
+  // but doesn't check role. Without this, a regular clinic user typing the URL
+  // would land on the layout (the actions guard writes; this guards reads too).
+  const user = await getSignedInClinicUser();
+  if (!user || user.role !== "superadmin") {
+    redirect("/login?next=/superadmin/clinics");
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-[#F4F5F7]">
       {slim ? <SuperAdminTopBarSlim /> : <SuperAdminTopBar />}
       <div className="flex min-h-0 flex-1">
-        {!slim && <SuperAdminSidebar active={active} />}
+        {!slim && <SuperAdminSidebar active={active} user={user} />}
         <main className="flex min-w-0 flex-1 flex-col">{children}</main>
       </div>
     </div>
@@ -145,9 +191,15 @@ function SuperAdminTopBarSlim() {
         Draft · auto-saved 1s ago
       </span>
       <div className="flex-1" />
-      <span className="grid h-[26px] w-[26px] place-items-center rounded-pill bg-white text-[11px] font-semibold text-brand">
-        RA
-      </span>
+      <Link
+        href="/logout"
+        prefetch={false}
+        aria-label="Sign out"
+        title="Sign out"
+        className="grid h-[26px] w-[26px] place-items-center rounded-pill bg-white/15 text-[11px] text-white/85 hover:bg-white/25"
+      >
+        <i className="fas fa-sign-out-alt text-[11px]" />
+      </Link>
     </header>
   );
 }

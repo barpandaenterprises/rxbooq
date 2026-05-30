@@ -139,3 +139,58 @@ export function publicAssetPathFromUrl(publicUrl: string): string | null {
   if (idx === -1) return null;
   return decodeURIComponent(publicUrl.slice(idx + marker.length));
 }
+
+// =============================================================================
+// Onboarding drafts — verification document uploads (clinic-applications bucket,
+// 0009). Uses a different top-level prefix than the post-approval applications/
+// path so storage RLS can stay deny-for-anon: writes always go via service-role
+// from the onboarding server action, which is the trust boundary.
+//
+// Path convention:
+//   drafts/{draftId}/{kind}/{uuid}-{safe-file-name}
+// =============================================================================
+
+export const CLINIC_APPLICATIONS_BUCKET = "clinic-applications";
+
+export type OnboardingDocKind = "registration_cert" | "clinic_license";
+
+function buildOnboardingDocPath(
+  draftId: string,
+  kind:    OnboardingDocKind,
+  fileName: string,
+): string {
+  return `drafts/${draftId}/${kind}/${randomUUID()}-${safeFileName(fileName)}`;
+}
+
+export async function uploadOnboardingDoc(opts: {
+  draftId:     string;
+  kind:        OnboardingDocKind;
+  fileName:    string;
+  contentType: string;
+  data:        ArrayBuffer | Uint8Array | Buffer;
+}): Promise<UploadClinicFileResult> {
+  const supabase = serviceClient();
+  const path     = buildOnboardingDocPath(opts.draftId, opts.kind, opts.fileName);
+
+  const { error } = await supabase.storage
+    .from(CLINIC_APPLICATIONS_BUCKET)
+    .upload(path, opts.data, {
+      contentType: opts.contentType,
+      upsert:      false,
+    });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, path };
+}
+
+export async function getSignedOnboardingDocUrl(
+  path: string,
+  expiresInSec = 3600,
+): Promise<string | null> {
+  const supabase = serviceClient();
+  const { data, error } = await supabase.storage
+    .from(CLINIC_APPLICATIONS_BUCKET)
+    .createSignedUrl(path, expiresInSec);
+  if (error || !data) return null;
+  return data.signedUrl;
+}

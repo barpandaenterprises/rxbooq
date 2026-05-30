@@ -14,9 +14,12 @@ export type SignedInClinicUser = {
  * Cached per request so it can be called from multiple Server Components
  * without duplicating the round-trip.
  *
- * RLS lets staff read their own clinic_users row, so a single query is enough.
- * Super-admins (raw_app_meta_data.role = 'superadmin') don't have a
- * clinic_users row — we surface their email + role anyway.
+ * Resolution order:
+ *   1. raw_app_meta_data.role = 'superadmin'  → platform-wide role wins
+ *      even if the same auth user also has a clinic_users row (common for
+ *      founder/dev accounts seeded as a clinic_admin first).
+ *   2. clinic_users row                       → per-tenant staff role
+ *   3. otherwise null role (signed in but unaffiliated)
  */
 export const getSignedInClinicUser = cache(
   async (): Promise<SignedInClinicUser | null> => {
@@ -25,6 +28,17 @@ export const getSignedInClinicUser = cache(
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return null;
+
+    const metaRole = (user.app_metadata?.role as string | undefined) ?? null;
+    if (metaRole === "superadmin") {
+      return {
+        authUserId:  user.id,
+        email:       user.email ?? null,
+        displayName: user.email ?? "Signed in",
+        role:        "superadmin",
+        clinicId:    null,
+      };
+    }
 
     const { data: row } = await supabase
       .from("clinic_users")
@@ -42,12 +56,11 @@ export const getSignedInClinicUser = cache(
       };
     }
 
-    const metaRole = (user.app_metadata?.role as string | undefined) ?? null;
     return {
       authUserId:  user.id,
       email:       user.email ?? null,
       displayName: user.email ?? "Signed in",
-      role:        metaRole === "superadmin" ? "superadmin" : null,
+      role:        null,
       clinicId:    null,
     };
   },

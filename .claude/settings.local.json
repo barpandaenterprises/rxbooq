@@ -3,7 +3,11 @@
     "allow": [
       "Read(//c/Desktop/Healthcare/**)",
       "Bash(npm run *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(ls c:/Desktop/Healthcare/doctorkart/src/app c:/Desktop/Healthcare/doctorkart/src/lib c:/Desktop/Healthcare/doctorkart/src/app/api 2>nul)"
+    ],
+    "additionalDirectories": [
+      "c:\\Desktop\\Healthcare\\doctorkart"
     ]
   }
 }

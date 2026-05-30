@@ -108,7 +108,9 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Skip static, image, fonts, healthcheck, and well-known files.
-    "/((?!_next/static|_next/image|favicon.ico|api/health|fonts/|robots.txt|sitemap.xml).*)",
+    // Skip static, image, fonts, healthcheck, well-known files, plus webhook
+    // and cron endpoints (they verify their own signatures/secrets and must
+    // not invoke Supabase session refresh).
+    "/((?!_next/static|_next/image|favicon.ico|api/health|api/webhooks/|api/cron/|fonts/|robots.txt|sitemap.xml).*)",
   ],
 };
