@@ -20,13 +20,13 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const { error, next } = await searchParams;
 
   // Tenant-aware brand panel — show the resolved clinic's name when the user
-  // is on a tenant subdomain. Falls back to "Doctor Kart" on the apex.
+  // is on a tenant subdomain. Falls back to "Rxbooq" on the apex.
   const h = await headers();
   const slug = h.get("x-clinic-slug");
   const host = h.get("x-host");
   const clinic = await getClinicByHostOrSlug({ slug, host });
 
-  const clinicName = clinic?.name ?? "Doctor Kart";
+  const clinicName = clinic?.name ?? "Rxbooq";
   const tagline    = clinic
     ? "Sign in to manage today's schedule, patients, and messages."
     : "The clinic operating system. Sign in to your workspace.";
@@ -59,7 +59,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <div className="text-[18px] font-semibold">{clinicName}</div>
               {clinic && (
                 <div className="text-[12px] text-white/60">
-                  Powered by Doctor Kart
+                  Powered by Rxbooq
                 </div>
               )}
             </div>
@@ -87,7 +87,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </div>
 
         <div className="relative text-[12px] text-white/55">
-          © {new Date().getFullYear()} Doctor Kart · Made in Sambalpur
+          © {new Date().getFullYear()} Rxbooq · Made in Sambalpur
         </div>
       </aside>
 

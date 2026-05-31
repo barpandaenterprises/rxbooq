@@ -13,7 +13,7 @@ export function ClinicSiteFooter({ clinicName }: Props) {
         <div className="flex items-center gap-3">
           <i className="fas fa-lock text-[11px]" />
           Powered by{" "}
-          <Link href="https://doctorkart.in" className="text-link-hover no-underline">DoctorKart</Link>
+          <Link href="https://rxbooq.com" className="text-link-hover no-underline">Rxbooq</Link>
         </div>
       </div>
     </footer>

@@ -20,10 +20,10 @@ import { PlatformCtaStrip } from "@/components/compositions/PlatformCtaStrip";
  */
 
 export const metadata: Metadata = {
-  title:       "DoctorKart — modern clinic software for India",
+  title:       "Rxbooq — modern clinic software for India",
   description: "Public profile, online booking, EMR, and WhatsApp engagement for clinics. Start free in 5 minutes.",
   openGraph: {
-    title:       "DoctorKart — modern clinic software for India",
+    title:       "Rxbooq — modern clinic software for India",
     description: "Public profile, online booking, EMR, and WhatsApp engagement for clinics. Start free.",
     type:        "website",
   },

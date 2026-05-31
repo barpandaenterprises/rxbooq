@@ -225,7 +225,7 @@ export function BroadcastDialog({ trigger, open: controlledOpen, onOpenChange }:
                 )}
                 {!loadingTpls && templates.length === 0 && !templatesError && (
                   <div className="rounded-md border border-dashed border-border bg-surface-muted px-4 py-8 text-center text-[13px] text-muted">
-                    No approved templates available. Contact Doctor Kart support to register a broadcast template.
+                    No approved templates available. Contact Rxbooq support to register a broadcast template.
                   </div>
                 )}
 

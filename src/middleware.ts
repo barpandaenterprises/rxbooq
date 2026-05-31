@@ -18,19 +18,19 @@ type CookieToSet = { name: string; value: string; options: CookieOptions };
  *
  * Resolution order (tenant):
  *   1. Custom domain (drmahakur.com)
- *   2. Subdomain     (mahakur.doctorkart.in)
- *   3. Apex          (doctorkart.in or local dev) — no tenant
+ *   2. Subdomain     (mahakur.rxbooq.com)
+ *   3. Apex          (rxbooq.com or local dev) — no tenant
  */
 
 const APEX_HOSTS = new Set([
-  "doctorkart.in",
-  "www.doctorkart.in",
-  "doctorkart.local",
+  "rxbooq.com",
+  "www.rxbooq.com",
+  "rxbooq.local",
   "localhost:3000",
   "localhost",
 ]);
 
-const PLATFORM_DOMAIN = "doctorkart.in";
+const PLATFORM_DOMAIN = "rxbooq.com";
 
 function resolveTenantSlug(req: NextRequest): string | null {
   const host = req.headers.get("host")?.toLowerCase() ?? "";

@@ -137,7 +137,7 @@ export function PublicSiteFooter() {
           <span>
             Powered by{" "}
             <Link href="/" className="text-white no-underline">
-              Doctor Kart
+              Rxbooq
             </Link>
           </span>
         </div>

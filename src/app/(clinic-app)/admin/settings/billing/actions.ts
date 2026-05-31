@@ -70,7 +70,7 @@ export async function upgradePlanAction(input: UpgradeInput): Promise<UpgradeRes
   if (!customerId) {
     try {
       const c = await createCustomer({
-        name:    cu.display_name ?? "DoctorKart user",
+        name:    cu.display_name ?? "Rxbooq user",
         email:   cu.email ?? user.email ?? "",
         contact: cu.phone ?? "",
       });

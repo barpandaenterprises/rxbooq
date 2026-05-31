@@ -6,8 +6,8 @@ import "@/styles/globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "Doctor Kart",
-    template: "%s | Doctor Kart",
+    default: "Rxbooq",
+    template: "%s | Rxbooq",
   },
   description:
     "Multi-tenant clinic platform: website, online booking, and WhatsApp automation for clinics across India.",

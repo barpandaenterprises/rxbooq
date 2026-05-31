@@ -81,7 +81,7 @@ export async function createSubscription(args: CreateSubscriptionArgs): Promise<
     start_at:        startAt,
     offer_id:        offerId,
     notes: {
-      doctorkart_customer_id: args.customerId,
+      rxbooq_customer_id: args.customerId,
       coupon_code:            args.coupon?.code ?? "",
     },
   });

@@ -135,7 +135,7 @@ export function WaTemplatesDialog({ trigger, open: controlledOpen, onOpenChange 
 
           <div className="border-t border-border bg-surface-muted px-5 py-3 text-[12px] text-muted">
             <i className="fas fa-info-circle mr-1.5 text-link-hover" />
-            New templates need Meta approval and are added by Doctor Kart support. Contact us to request one.
+            New templates need Meta approval and are added by Rxbooq support. Contact us to request one.
           </div>
         </Dialog.Content>
       </Dialog.Portal>

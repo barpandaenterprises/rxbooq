@@ -48,7 +48,7 @@ export async function syncPlans(): Promise<SyncPlansResult> {
           name:        p.display_name,
           amount:      p.monthly_price_inr * 100, // Razorpay takes paise
           currency:    "INR",
-          description: `DoctorKart ${p.display_name} plan`,
+          description: `Rxbooq ${p.display_name} plan`,
         },
       });
 

@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Get started — DoctorKart",
-  description: "Set up your clinic on DoctorKart in under 5 minutes.",
+  title: "Get started — Rxbooq",
+  description: "Set up your clinic on Rxbooq in under 5 minutes.",
 };
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
@@ -11,13 +11,13 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Link href="/" className="text-[17px] font-semibold text-heading no-underline">
-            DoctorKart
+            Rxbooq
           </Link>
           <Link
             href="/login"
             className="text-[13px] font-medium text-muted no-underline hover:text-heading"
           >
-            Already on DoctorKart? Sign in
+            Already on Rxbooq? Sign in
           </Link>
         </div>
       </header>

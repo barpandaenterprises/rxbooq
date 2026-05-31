@@ -79,7 +79,7 @@ export function PracticeStep({ draft, draftId }: { draft: Draft; draftId: string
         <FormField label="Clinic name" required>
           <input className={TEXT_INPUT_CLASS} value={name} onChange={(e) => onNameChange(e.target.value)} placeholder="Mahakur Clinic" />
         </FormField>
-        <FormField label="URL slug" required hint="doctorkart.in/d/{slug}">
+        <FormField label="URL slug" required hint="rxbooq.com/d/{slug}">
           <input className={TEXT_INPUT_CLASS} value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))} placeholder="mahakur-clinic" />
         </FormField>
         <FormField label="Street address" required>

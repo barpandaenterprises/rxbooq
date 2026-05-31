@@ -24,7 +24,7 @@ export function AppointmentSummary({
   locale,
   onLocaleChange,
   compact,
-  clinicName    = "Doctor Kart Clinic",
+  clinicName    = "Rxbooq Clinic",
   clinicAddress = "",
 }: Props) {
   const rows: Array<[string, string, string]> = [

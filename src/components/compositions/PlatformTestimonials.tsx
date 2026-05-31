@@ -11,7 +11,7 @@ const QUOTES: Quote[] = [
     role:  "Multi-specialty practice",
   },
   {
-    quote: "I run a solo pediatric practice — DoctorKart gives me the polish of a hospital website without the cost.",
+    quote: "I run a solo pediatric practice — Rxbooq gives me the polish of a hospital website without the cost.",
     name:  "A pediatrician in Cuttack",
     role:  "Solo practitioner",
   },

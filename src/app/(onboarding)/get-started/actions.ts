@@ -103,7 +103,7 @@ export async function sendOnboardingOtpAction(rawPhone: string): Promise<SendOtp
 
   const sms = await sendSms({
     to:   phone,
-    body: `Your DoctorKart code is ${code}. It expires in ${OTP_TTL_MIN} minutes.`,
+    body: `Your Rxbooq code is ${code}. It expires in ${OTP_TTL_MIN} minutes.`,
   });
   if (!sms.ok) {
     // Don't reveal provider details to the user; the OTP row is already saved

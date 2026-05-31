@@ -23,7 +23,7 @@ export function ClinicHero({ clinic, doctors, bookHref }: Props) {
       strong: clinic.city,
       sub:    clinic.state ?? "",
     },
-    verified && { strong: "Verified", sub: "by DoctorKart", check: true },
+    verified && { strong: "Verified", sub: "by Rxbooq", check: true },
   ].filter(Boolean) as Array<{ strong: string; sub: string; check?: boolean }>;
 
   return (

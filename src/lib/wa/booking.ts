@@ -93,7 +93,7 @@ export async function sendBookingConfirmation(appointmentId: string): Promise<vo
     language:      langFromDb(patient.language),
     variables: [
       patient.full_name,
-      clinic?.name ?? "Doctor Kart",
+      clinic?.name ?? "Rxbooq",
       formatIstDate(ctx.starts_at),
       formatIstTime(ctx.starts_at),
       "",  // clinic_address — clinics table doesn't carry one yet
@@ -122,7 +122,7 @@ export async function sendReminderEveningBefore(appointmentId: string): Promise<
     language:      langFromDb(patient.language),
     variables: [
       patient.full_name,
-      clinic?.name ?? "Doctor Kart",
+      clinic?.name ?? "Rxbooq",
       formatIstDate(ctx.starts_at),
       formatIstTime(ctx.starts_at),
     ],
@@ -146,7 +146,7 @@ export async function sendReminderOneHour(appointmentId: string): Promise<void> 
     language:      langFromDb(patient.language),
     variables: [
       patient.full_name,
-      clinic?.name ?? "Doctor Kart",
+      clinic?.name ?? "Rxbooq",
       formatIstTime(ctx.starts_at),
     ],
     to: patient.phone_e164,

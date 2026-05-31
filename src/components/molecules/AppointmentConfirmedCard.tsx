@@ -19,7 +19,7 @@ export function AppointmentConfirmedCard({
   date,
   slot,
   compact,
-  clinicName    = "Doctor Kart Clinic",
+  clinicName    = "Rxbooq Clinic",
   clinicAddress = "",
 }: Props) {
   const CLINIC_NAME    = clinicName;

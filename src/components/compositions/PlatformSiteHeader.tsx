@@ -17,7 +17,7 @@ export function PlatformSiteHeader() {
           <span className="grid h-8 w-8 flex-none place-items-center rounded-md bg-brand text-[14px] text-white md:h-9 md:w-9 md:text-[16px]">
             <i className="fas fa-heartbeat" />
           </span>
-          <span className="leading-tight">DoctorKart</span>
+          <span className="leading-tight">Rxbooq</span>
         </Link>
 
         <div className="ml-6 hidden items-center gap-7 md:flex">

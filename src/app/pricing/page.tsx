@@ -3,7 +3,7 @@ import { serviceClient } from "@/lib/supabase/server";
 import { formatInr } from "@/lib/billing/pricing";
 
 export const metadata = {
-  title:       "Pricing — DoctorKart",
+  title:       "Pricing — Rxbooq",
   description: "Plans for every clinic — from a free public listing to full practice management. Pay only when you're ready.",
 };
 
@@ -46,7 +46,7 @@ export default async function PricingPage() {
     <div className="min-h-screen bg-[#fafbfc] pb-16 text-body">
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="text-[17px] font-semibold text-heading no-underline">DoctorKart</Link>
+          <Link href="/" className="text-[17px] font-semibold text-heading no-underline">Rxbooq</Link>
           <div className="flex items-center gap-4 text-[13px]">
             <Link href="/login" className="text-muted no-underline hover:text-heading">Sign in</Link>
             <Link href="/get-started" className="rounded-md bg-cta px-4 py-2 font-medium text-cta-fg no-underline">Get started</Link>
@@ -111,7 +111,7 @@ export default async function PricingPage() {
             Yes. Cancellation takes effect at the end of your current billing cycle. Your profile stays live on the Free tier.
           </Faq>
           <Faq q="Is my data secure?">
-            Your clinical records are stored in encrypted Supabase Postgres with row-level security; verification documents are private and only visible to you and DoctorKart&apos;s review team.
+            Your clinical records are stored in encrypted Supabase Postgres with row-level security; verification documents are private and only visible to you and Rxbooq&apos;s review team.
           </Faq>
         </div>
       </section>

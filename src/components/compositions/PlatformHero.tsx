@@ -74,7 +74,7 @@ function HeroMockup() {
           <span className="h-2.5 w-2.5 rounded-pill bg-[#ff5f57]" />
           <span className="h-2.5 w-2.5 rounded-pill bg-[#febc2e]" />
           <span className="h-2.5 w-2.5 rounded-pill bg-[#28c840]" />
-          <span className="ml-3 truncate font-mono text-[10px] text-muted">your-clinic.doctorkart.in/admin/today</span>
+          <span className="ml-3 truncate font-mono text-[10px] text-muted">your-clinic.rxbooq.com/admin/today</span>
         </div>
 
         {/* Header row */}

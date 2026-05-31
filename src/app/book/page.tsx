@@ -64,7 +64,7 @@ async function PickAClinic() {
       <div className="mx-auto max-w-3xl">
         <div className="mb-6 text-center">
           <Link href="/" className="text-[14px] font-semibold text-link-hover no-underline">
-            <i className="fas fa-arrow-left mr-1 text-[11px]" /> DoctorKart
+            <i className="fas fa-arrow-left mr-1 text-[11px]" /> Rxbooq
           </Link>
         </div>
 

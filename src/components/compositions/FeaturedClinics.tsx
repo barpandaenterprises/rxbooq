@@ -62,13 +62,13 @@ export async function FeaturedClinics() {
             Find a clinic near you.
           </h2>
           <p className="text-[14px] leading-[22px] text-muted md:text-[16px]">
-            Browse some of the clinics live on DoctorKart. Book directly from their profile.
+            Browse some of the clinics live on Rxbooq. Book directly from their profile.
           </p>
         </header>
 
         {cards.length === 0 ? (
           <div className="mx-auto max-w-md rounded-lg border border-dashed border-border bg-white p-8 text-center text-[13px] text-muted">
-            New clinics are joining DoctorKart every week — check back soon.
+            New clinics are joining Rxbooq every week — check back soon.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

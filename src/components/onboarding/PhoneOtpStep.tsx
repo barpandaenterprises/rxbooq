@@ -63,7 +63,7 @@ export function PhoneOtpStep({ mode = "start" }: Props) {
   return (
     <div className="rounded-lg border border-border bg-white p-6 md:p-8">
       <h1 className="mb-1 text-[24px] font-semibold leading-tight text-heading">
-        {mode === "resume" ? "Resume your application" : "Set up your clinic on DoctorKart"}
+        {mode === "resume" ? "Resume your application" : "Set up your clinic on Rxbooq"}
       </h1>
       <p className="mb-6 text-[14px] text-muted">
         {mode === "resume"

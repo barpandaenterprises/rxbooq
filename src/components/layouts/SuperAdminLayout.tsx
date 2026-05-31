@@ -43,7 +43,7 @@ export function SuperAdminTopBar() {
           <i className="fas fa-bolt" />
         </span>
         <div>
-          <div className="text-[15px] font-bold leading-[17px]">Doctor Kart</div>
+          <div className="text-[15px] font-bold leading-[17px]">Rxbooq</div>
           <div className="text-[10px] uppercase tracking-[0.06em] text-white/70">
             Super-admin console
           </div>
@@ -182,7 +182,7 @@ function SuperAdminTopBarSlim() {
       <span className="grid h-[26px] w-[26px] place-items-center rounded-sm bg-white text-[11px] text-brand">
         <i className="fas fa-bolt" />
       </span>
-      <span className="font-semibold">Doctor Kart</span>
+      <span className="font-semibold">Rxbooq</span>
       <span className="text-white/70">·</span>
       <span className="text-white/85">Onboarding</span>
       <i className="fas fa-chevron-right text-[9px] text-white/55" />

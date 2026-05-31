@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const { clinic } = page;
   const desc = clinic.pitch ?? `${clinic.name} — book an appointment online.`;
   return {
-    title:       `${clinic.name} — DoctorKart`,
+    title:       `${clinic.name} — Rxbooq`,
     description: desc.slice(0, 160),
     openGraph: {
       title:       clinic.name,

@@ -37,7 +37,7 @@ export function PlatformSiteFooter() {
               <span className="grid h-8 w-8 place-items-center rounded-md bg-brand text-[14px] text-white">
                 <i className="fas fa-heartbeat" />
               </span>
-              DoctorKart
+              Rxbooq
             </Link>
             <p className="mt-3 text-[13px] leading-[20px] text-muted">
               Modern clinic software for India — public profile, online booking, EMR, and WhatsApp engagement.
@@ -61,7 +61,7 @@ export function PlatformSiteFooter() {
         </div>
 
         <div className="mt-10 flex flex-col items-start justify-between gap-2 border-t border-border pt-6 text-[12px] text-muted md:flex-row md:items-center">
-          <div>© {year} DoctorKart. All rights reserved.</div>
+          <div>© {year} Rxbooq. All rights reserved.</div>
           <div className="flex items-center gap-3">
             <i className="fas fa-lock text-[11px]" />
             <span>Secure · DPDP-friendly · Razorpay billing</span>

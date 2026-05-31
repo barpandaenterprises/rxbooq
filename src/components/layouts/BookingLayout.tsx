@@ -48,7 +48,7 @@ export function BookingLayout({
       {/* Trust footer */}
       <div className={`mx-auto mt-6 text-center text-[12px] text-[#9aa9b8] ${widthClass}`}>
         <i className="fas fa-lock mr-1.5" />
-        Secure booking · Powered by Doctor Kart
+        Secure booking · Powered by Rxbooq
       </div>
     </div>
   );

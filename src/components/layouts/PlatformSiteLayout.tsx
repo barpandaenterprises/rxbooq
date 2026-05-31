@@ -2,7 +2,7 @@ import { PlatformSiteHeader } from "@/components/compositions/PlatformSiteHeader
 import { PlatformSiteFooter } from "@/components/compositions/PlatformSiteFooter";
 
 /**
- * Apex marketing wrapper. Renders on doctorkart.in (when no tenant is
+ * Apex marketing wrapper. Renders on rxbooq.com (when no tenant is
  * resolved) and on /pricing. No mobile sticky CTA bar — the platform isn't a
  * booking surface, it's a SaaS pitch.
  */

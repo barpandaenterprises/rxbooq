@@ -180,7 +180,7 @@ function LivePreview() {
         </span>
         <div className="flex flex-1 items-center gap-1.5 rounded-sm bg-white px-2.5 py-0.5 text-[10px] text-muted">
           <i className="fas fa-lock text-[8px] text-[#3a8b5e]" />
-          mahima.doctorkart.in
+          mahima.rxbooq.com
         </div>
       </div>
 
@@ -333,7 +333,7 @@ function Step2Body() {
         <FieldShell label="Subdomain" ok hint="Subdomain available ✓">
           <span className="mr-1.5 text-[14px] text-[#9aa9b8]">https://</span>
           <span className="flex-1 truncate text-[14px] text-heading">mahima</span>
-          <span className="ml-1.5 text-[13px] text-[#9aa9b8]">.doctorkart.in</span>
+          <span className="ml-1.5 text-[13px] text-[#9aa9b8]">.rxbooq.com</span>
           <i className="fas fa-check-circle ml-2 text-[14px] text-[#3a8b5e]" />
         </FieldShell>
 
