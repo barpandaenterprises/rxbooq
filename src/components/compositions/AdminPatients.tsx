@@ -3,6 +3,7 @@
 import * as Popover from "@radix-ui/react-popover";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AddPatientDialog } from "@/components/molecules/AddPatientDialog";
 import type { PatientLang, PatientRow } from "@/lib/data/admin-patients";
@@ -83,6 +84,8 @@ function LangPill({ l }: { l: Lang }) {
 }
 
 function PatientRowMenu({ patientId, patientName }: { patientId: string; patientName: string }) {
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -102,7 +105,7 @@ function PatientRowMenu({ patientId, patientName }: { patientId: string; patient
         >
           <DropdownMenu.Item asChild>
             <Link
-              href={`/admin/patients/${patientId}`}
+              href={`/${slug}/admin/patients/${patientId}`}
               className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading no-underline outline-none hover:bg-surface-muted"
             >
               <i className="fas fa-eye w-4 text-center text-[12px] text-muted" />

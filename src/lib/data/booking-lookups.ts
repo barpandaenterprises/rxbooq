@@ -12,6 +12,7 @@
 import { serverClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/feature-flags";
 import { BOOKING_DOCTORS } from "@/lib/booking-data";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 
 export type BookingLookupDoctor = {
   id:           string;
@@ -71,6 +72,9 @@ function initialsOf(name: string): string {
 // =============================================================================
 
 async function getLiveLookups(): Promise<BookingLookups> {
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) return { doctors: [], departments: [] };
+
   const supabase = await serverClient();
 
   const [
@@ -80,11 +84,13 @@ async function getLiveLookups(): Promise<BookingLookups> {
     supabase
       .from("doctors")
       .select("id, display_name, qualifications, department_id")
+      .eq("clinic_id", clinicId)
       .eq("is_active", true)
       .order("display_order", { ascending: true }),
     supabase
       .from("departments")
       .select("id, name, slug, display_order")
+      .eq("clinic_id", clinicId)
       .eq("is_active", true)
       .order("display_order", { ascending: true })
       .order("name",          { ascending: true }),

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { updateDoctorAction } from "@/app/(clinic-app)/admin/doctors/actions";
+import { updateDoctorAction } from "@/app/(clinic-app)/[clinicSlug]/admin/doctors/actions";
 import { DoctorPhotoField, fileToDataUrl } from "@/components/molecules/DoctorPhotoField";
 import {
   SPECIALTIES,

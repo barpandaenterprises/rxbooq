@@ -9,6 +9,12 @@ import { formatInr } from "@/lib/billing/pricing";
  * "WA credit") were removed until the underlying signal exists.
  */
 
+type ClinicAdmin = {
+  display_name: string | null;
+  email:        string | null;
+  phone:        string | null;
+};
+
 type ClinicRow = {
   id:                  string;
   name:                string;
@@ -31,6 +37,7 @@ type ClinicRow = {
     } | null;
   } | null;
   patient_count: number;
+  admins:        ClinicAdmin[];
 };
 
 type Kpis = {
@@ -64,6 +71,21 @@ export async function SuperAdminClinics() {
   const patientCount = new Map<string, number>();
   for (const r of patientRows ?? []) {
     patientCount.set(r.clinic_id, (patientCount.get(r.clinic_id) ?? 0) + 1);
+  }
+
+  // ---- 2b. Admin users per clinic — only role='clinic_admin' (front-desk and
+  // doctor roles aren't "admins" in the auth-level sense). Single query,
+  // grouped client-side to avoid N+1.
+  const { data: adminRows } = await supabase
+    .from("clinic_users")
+    .select("clinic_id, display_name, email, phone, role")
+    .eq("role", "clinic_admin")
+    .order("created_at");
+  const adminsByClinic = new Map<string, ClinicAdmin[]>();
+  for (const a of adminRows ?? []) {
+    const list = adminsByClinic.get(a.clinic_id) ?? [];
+    list.push({ display_name: a.display_name, email: a.email, phone: a.phone });
+    adminsByClinic.set(a.clinic_id, list);
   }
 
   // The Supabase typings turn the embedded 1:N joins into arrays; coerce + pick
@@ -100,6 +122,7 @@ export async function SuperAdminClinics() {
           }
         : null,
       patient_count: patientCount.get(c.id) ?? 0,
+      admins:        adminsByClinic.get(c.id) ?? [],
     };
   });
 
@@ -239,6 +262,34 @@ function StatusPill({ status, trialEndsAt }: { status: string | undefined; trial
   );
 }
 
+function AdminsCell({ admins }: { admins: ClinicAdmin[] }) {
+  if (admins.length === 0) {
+    return <span className="text-[12px] text-[#9aa9b8]">No admin</span>;
+  }
+  const primary = admins[0]!;
+  const extra   = admins.length - 1;
+  const primaryName  = primary.display_name?.trim() || primary.email || "Unnamed admin";
+  // Full list as a hover tooltip (native HTML title) so superadmins can copy
+  // the addresses without us building a popover.
+  const tooltip = admins.map((a) => {
+    const name = a.display_name?.trim() || "Unnamed";
+    return a.email ? `${name} <${a.email}>` : name;
+  }).join("\n");
+  return (
+    <div className="max-w-[180px] text-[12px]" title={tooltip}>
+      <div className="truncate font-medium text-heading">{primaryName}</div>
+      {primary.email && (
+        <div className="truncate text-[11px] text-muted">{primary.email}</div>
+      )}
+      {extra > 0 && (
+        <span className="mt-0.5 inline-block rounded-pill bg-[#E6F1FA] px-1.5 py-0.5 text-[10px] font-semibold text-link-hover">
+          +{extra} more
+        </span>
+      )}
+    </div>
+  );
+}
+
 function VerifBadge({ status }: { status: string }) {
   if (status === "verified")  return <span className="rounded-pill bg-[#E6F4EC] px-2 py-0.5 text-[10px] font-semibold text-[#3a8b5e]">Verified</span>;
   if (status === "pending")   return <span className="rounded-pill bg-[#FFF8EC] px-2 py-0.5 text-[10px] font-semibold text-[#7a5c2b]">Pending</span>;
@@ -273,6 +324,7 @@ function ClinicTable({
               <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em]">Plan</th>
               <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em]">Status</th>
               <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em]">Verification</th>
+              <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em]">Admins</th>
               <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.06em]">MRR</th>
               <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.06em]">Patients</th>
               <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em]">Joined</th>
@@ -302,7 +354,7 @@ function PlanGroup({ group }: { group: { label: string; code: string; rows: Clin
   return (
     <>
       <tr className="bg-[#F4F5F7]">
-        <td colSpan={8} className="px-4 py-2.5">
+        <td colSpan={9} className="px-4 py-2.5">
           <div className="flex items-center gap-2.5">
             <PlanBadge label={group.label} code={group.code} />
             <span className="text-[13px] font-semibold text-heading">{group.rows.length} clinic{group.rows.length === 1 ? "" : "s"}</span>
@@ -344,13 +396,14 @@ function PlanGroup({ group }: { group: { label: string; code: string; rows: Clin
             </td>
             <td className="px-3 py-3"><StatusPill status={sub?.status} trialEndsAt={sub?.trial_ends_at ?? null} /></td>
             <td className="px-3 py-3"><VerifBadge status={c.verification_status} /></td>
+            <td className="px-3 py-3"><AdminsCell admins={c.admins} /></td>
             <td className="px-3 py-3 text-right text-[13px] font-semibold text-heading">
               {mrr === 0 ? <span className="font-normal text-[#9aa9b8]">—</span> : formatInr(mrr)}
             </td>
             <td className="px-3 py-3 text-right text-[13px] text-heading">{c.patient_count.toLocaleString("en-IN")}</td>
             <td className="px-3 py-3 text-[12px] text-muted">{new Date(c.created_at).toLocaleDateString("en-IN")}</td>
             <td className="px-3 py-3 pr-4 text-right">
-              <Link href={`/d/${c.slug}`} target="_blank" rel="noopener noreferrer" className="text-[12px] text-link-hover no-underline" title="Open public profile">
+              <Link href={`/${c.slug}`} target="_blank" rel="noopener noreferrer" className="text-[12px] text-link-hover no-underline" title="Open public profile">
                 <i className="fas fa-external-link-alt text-[11px]" />
               </Link>
             </td>

@@ -1,11 +1,15 @@
 import { cache } from "react";
-import { serverClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
+import { serverClient, serviceClient } from "@/lib/supabase/server";
 
 export type SignedInClinicUser = {
   authUserId:  string;
   email:       string | null;
   displayName: string;
   role:        "clinic_admin" | "doctor" | "receptionist" | "superadmin" | null;
+  /** First / only clinic linked via clinic_users — used for display fallbacks.
+   *  For URL-driven scoping, prefer getCurrentStaffClinicId() which reads the
+   *  active clinic from the request URL (set by middleware). */
   clinicId:    string | null;
 };
 
@@ -65,3 +69,101 @@ export const getSignedInClinicUser = cache(
     };
   },
 );
+
+/**
+ * Returns the clinic_id the signed-in user is *acting in* right now, scoped by
+ * the request URL. Returns null when:
+ *   - The URL has no clinic context (e.g. apex platform marketing).
+ *   - The slug in the URL doesn't resolve to an active clinic.
+ *   - The signed-in user is not a member of that clinic (= access denied).
+ *
+ * Resolution order:
+ *   1. `x-active-clinic-slug` header — set by middleware from either the URL
+ *      path (`/[slug]/admin/...`) or the resolved tenant subdomain.
+ *   2. Membership check via `clinic_users` (clinic_id + auth_user_id).
+ *
+ * Multi-clinic-membership safe: a doctor in two clinics will see clinic A's
+ * data when they hit /a/admin/* and clinic B's data on /b/admin/*. The URL
+ * is the source of truth; the user's clinic_users row(s) only gate access.
+ *
+ * Use this in every /admin/* data loader and server action as an explicit
+ * .eq("clinic_id", …) filter — defense-in-depth on top of RLS.
+ */
+export const getCurrentStaffClinicId = cache(async (): Promise<string | null> => {
+  const sess = await serverClient();
+  const { data: { user } } = await sess.auth.getUser();
+  if (!user) return null;
+
+  const admin = serviceClient();
+  const h    = await headers();
+  const slug = h.get("x-active-clinic-slug");
+
+  if (slug) {
+    // URL-driven path: look up clinic by slug, verify membership.
+    const { data: clinic } = await admin
+      .from("clinics")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!clinic) return null;
+
+    const { data: membership } = await admin
+      .from("clinic_users")
+      .select("id")
+      .eq("clinic_id", clinic.id)
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+    return membership ? clinic.id : null;
+  }
+
+  // Fallback for legacy /admin/* routes that haven't been migrated to
+  // /[clinicSlug]/admin/* yet: use the user's first membership. This keeps
+  // single-clinic users working during the migration. When the route
+  // restructure is done and legacy /admin/* is deleted, this branch becomes
+  // dead code and can be removed.
+  const { data: firstMembership } = await admin
+    .from("clinic_users")
+    .select("clinic_id")
+    .eq("auth_user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return firstMembership?.clinic_id ?? null;
+});
+
+/**
+ * Returns every clinic the signed-in user belongs to (via clinic_users).
+ * Powers the sidebar clinic switcher. Empty list if not signed in or not
+ * a member of any clinic.
+ */
+export const getMyClinicMemberships = cache(async (): Promise<Array<{
+  clinicId: string;
+  slug:     string;
+  name:     string;
+  role:     "clinic_admin" | "doctor" | "receptionist";
+}>> => {
+  const sess = await serverClient();
+  const { data: { user } } = await sess.auth.getUser();
+  if (!user) return [];
+
+  const admin = serviceClient();
+  const { data } = await admin
+    .from("clinic_users")
+    .select("role, clinic:clinics ( id, slug, name )")
+    .eq("auth_user_id", user.id)
+    .order("created_at", { ascending: true });
+  if (!data) return [];
+
+  return data
+    .map((r) => {
+      const c = Array.isArray(r.clinic) ? r.clinic[0] : r.clinic;
+      if (!c) return null;
+      return {
+        clinicId: c.id,
+        slug:     c.slug,
+        name:     c.name,
+        role:     r.role as "clinic_admin" | "doctor" | "receptionist",
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+});

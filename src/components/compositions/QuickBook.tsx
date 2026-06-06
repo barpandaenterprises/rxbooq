@@ -70,7 +70,7 @@ function buildPrefill(intent: string): string {
   return `${intent}.\n\n— Sent from mahakurdental.in`;
 }
 
-export function QuickBook() {
+export function QuickBook({ clinicSlug }: { clinicSlug: string }) {
   return (
     <div className="mx-auto max-w-[640px] px-4 pb-10 pt-4 md:pb-16 md:pt-10">
       {/* Hero */}
@@ -150,7 +150,7 @@ export function QuickBook() {
           Comfortable filling a form?
         </div>
         <Link
-          href="/book"
+          href={`/${clinicSlug}/book`}
           className="mt-1 inline-flex items-center gap-1.5 text-[14px] font-medium text-link-hover no-underline"
         >
           <i className="fas fa-edit text-[11px]" />

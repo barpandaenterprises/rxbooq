@@ -20,9 +20,9 @@ import { CSS } from "@dnd-kit/utilities";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Popover from "@radix-ui/react-popover";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { deactivateDoctorAction, reorderDoctorsAction } from "@/app/(clinic-app)/admin/doctors/actions";
+import { deactivateDoctorAction, reorderDoctorsAction } from "@/app/(clinic-app)/[clinicSlug]/admin/doctors/actions";
 import { AddDoctorDialog } from "@/components/molecules/AddDoctorDialog";
 import { BlockDatesDialog } from "@/components/molecules/BlockDatesDialog";
 import { EditDoctorDialog } from "@/components/molecules/EditDoctorDialog";
@@ -422,6 +422,8 @@ export function AdminDoctors({
 }
 
 function DoctorRow({ d, draggable }: { d: Doctor; draggable: boolean }) {
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   const status = STATUS_META[d.status];
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: d.id,
@@ -458,7 +460,7 @@ function DoctorRow({ d, draggable }: { d: Doctor; draggable: boolean }) {
         )}
       </td>
       <td className="px-3 py-3">
-        <Link href={`/admin/doctors/${d.id}`} className="flex items-center gap-2.5 no-underline">
+        <Link href={`/${slug}/admin/doctors/${d.id}`} className="flex items-center gap-2.5 no-underline">
           <span
             className="grid h-10 w-10 flex-none place-items-center overflow-hidden rounded-pill text-[13px] font-semibold"
             style={{ background: d.avatarBg, color: d.avatarFg }}
@@ -515,10 +517,12 @@ function DoctorRow({ d, draggable }: { d: Doctor; draggable: boolean }) {
 }
 
 function DoctorCardMobile({ d }: { d: Doctor }) {
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   const status = STATUS_META[d.status];
   return (
     <Link
-      href={`/admin/doctors/${d.id}`}
+      href={`/${slug}/admin/doctors/${d.id}`}
       className="flex items-start gap-3 rounded-[12px] border border-border bg-white p-3.5 no-underline"
     >
       <span
@@ -556,6 +560,8 @@ function DoctorCardMobile({ d }: { d: Doctor }) {
 
 function DoctorRowMenu({ d }: { d: Doctor }) {
   const router = useRouter();
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   const [editOpen, setEditOpen]   = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
   const [isDeactivating, startDeactivate] = useTransition();
@@ -602,7 +608,7 @@ function DoctorRowMenu({ d }: { d: Doctor }) {
           <DropdownMenu.Content align="end" sideOffset={4} className="z-50 w-[200px] rounded-md border border-border bg-white p-1.5 shadow-md">
             <DropdownMenu.Item asChild>
               <Link
-                href={`/admin/doctors/${d.id}`}
+                href={`/${slug}/admin/doctors/${d.id}`}
                 className="flex cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] text-heading no-underline outline-none hover:bg-surface-muted"
               >
                 <i className="fas fa-eye w-4 text-center text-[12px] text-muted" />

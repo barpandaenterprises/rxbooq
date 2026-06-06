@@ -13,7 +13,7 @@ import {
   getDoctorSlotsForDateAction,
   getDoctorWorkingDatesAction,
   getDoctorsForSlotAction,
-} from "@/app/(clinic-app)/admin/appointments/actions";
+} from "@/app/(clinic-app)/[clinicSlug]/admin/appointments/actions";
 import {
   slotsInWindows,
   subtractBooked,

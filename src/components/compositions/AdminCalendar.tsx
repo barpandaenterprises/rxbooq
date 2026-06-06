@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toLocalIso } from "@/lib/booking-data";
 import type { CalendarAppt, CalendarApptStatus } from "@/lib/data/admin-calendar";
@@ -96,13 +96,15 @@ export function AdminCalendar({ weekStartIso, appointments }: Props) {
   }, [weekStart, todayIso]);
 
   const apptCount = appointments.length;
+  const params    = useParams<{ clinicSlug: string }>();
+  const slug      = params?.clinicSlug ?? "";
 
   const navigateToWeek = (iso: string) => {
-    router.push(`/admin/calendar?week=${iso}`);
+    router.push(`/${slug}/admin/calendar?week=${iso}`);
   };
   const goPrev   = () => navigateToWeek(addDaysIso(weekStartIso, -7));
   const goNext   = () => navigateToWeek(addDaysIso(weekStartIso, 7));
-  const goToday  = () => router.push("/admin/calendar");
+  const goToday  = () => router.push(`/${slug}/admin/calendar`);
 
   return (
     <div className="px-5 pt-7 md:px-8 md:pt-8">
@@ -322,7 +324,9 @@ function ApptDetailDialog({
   weekStart: Date;
   onClose: () => void;
 }) {
-  const open = appt !== null;
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
+  const open   = appt !== null;
 
   // Compute the actual ISO date from dayOffset + weekStart
   const isoDate = useMemo(() => {
@@ -400,7 +404,7 @@ function ApptDetailDialog({
                     <i className="fas fa-clock text-[11px]" /> Reschedule
                   </button>
                   <Link
-                    href="/admin/messages"
+                    href={`/${slug}/admin/messages`}
                     className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2 text-[13px] font-medium text-heading no-underline hover:border-link-hover hover:text-link-hover"
                   >
                     <i className="fab fa-whatsapp text-[12px] text-[#25D366]" /> Chat

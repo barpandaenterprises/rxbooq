@@ -6,6 +6,7 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 import { useMockData } from "@/lib/feature-flags";
 
 export type CalendarApptStatus = "confirmed" | "booked" | "completed" | "noshow" | "cancelled";
@@ -113,6 +114,9 @@ type DbRow = {
 };
 
 async function getLiveCalendar(mondayIst: Date): Promise<CalendarAppt[]> {
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) return [];
+
   const supabase = await serverClient();
   const end = new Date(mondayIst.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -123,6 +127,7 @@ async function getLiveCalendar(mondayIst: Date): Promise<CalendarAppt[]> {
       patient:patients ( full_name ),
       doctor:doctors  ( display_name )
     `)
+    .eq("clinic_id", clinicId)
     .gte("starts_at", mondayIst.toISOString())
     .lt("starts_at",  end.toISOString())
     .order("starts_at", { ascending: true });

@@ -1,7 +1,36 @@
 import Link from "next/link";
 import { NewAppointmentDialog } from "@/components/compositions/NewAppointmentDialog";
-import { getSignedInClinicUser, type SignedInClinicUser } from "@/lib/auth/current-user";
+import { ClinicSwitcher, type ClinicMembership } from "@/components/molecules/ClinicSwitcher";
+import {
+  getMyClinicMemberships,
+  getSignedInClinicUser,
+  type SignedInClinicUser,
+} from "@/lib/auth/current-user";
+import { getActiveClinicSlug } from "@/lib/routing/active-slug";
 import { getBookingLookups, type BookingLookups } from "@/lib/data/booking-lookups";
+import { serviceClient } from "@/lib/supabase/server";
+
+type ClinicHeader = { name: string; city: string | null };
+
+/**
+ * Load just enough to render the sidebar brand (clinic name + city).
+ * clinics table doesn't carry address — the city comes from the activated
+ * clinic_applications row.
+ */
+async function loadClinicHeader(clinicId: string): Promise<ClinicHeader | null> {
+  const supabase = serviceClient();
+  const [{ data: c }, { data: app }] = await Promise.all([
+    supabase.from("clinics").select("name").eq("id", clinicId).maybeSingle(),
+    supabase
+      .from("clinic_applications")
+      .select("city")
+      .eq("clinic_id", clinicId)
+      .eq("status", "active")
+      .maybeSingle(),
+  ]);
+  if (!c) return null;
+  return { name: c.name, city: app?.city ?? null };
+}
 
 export type AdminNavKey =
   | "Today"
@@ -13,30 +42,41 @@ export type AdminNavKey =
   | "Content"
   | "Settings";
 
-const NAV_ITEMS: Array<{
+type NavSpec = {
   ic: string;
   label: AdminNavKey;
-  href: string;
+  /** Path under /[slug]/admin (e.g. "/today"). Bare "#" if not wired yet. */
+  path: string;
   badge?: string;
   badgeCoral?: boolean;
-}> = [
-  { ic: "fa-calendar-day", label: "Today", href: "/admin/today", badge: "12" },
-  { ic: "fa-calendar-alt", label: "Calendar", href: "/admin/calendar" },
-  { ic: "fa-users", label: "Patients", href: "/admin/patients" },
-  { ic: "fa-user-md", label: "Doctors", href: "/admin/doctors" },
-  { ic: "fa-comments", label: "Messages", href: "/admin/messages", badge: "3", badgeCoral: true },
-  { ic: "fa-chart-line", label: "Analytics", href: "/admin/analytics" },
-  { ic: "fa-file-alt", label: "Content", href: "#" },
-  { ic: "fa-cog", label: "Settings", href: "/admin/settings/team" },
+};
+
+const NAV_ITEMS: NavSpec[] = [
+  { ic: "fa-calendar-day", label: "Today",     path: "/today",            badge: "12" },
+  { ic: "fa-calendar-alt", label: "Calendar",  path: "/calendar" },
+  { ic: "fa-users",        label: "Patients",  path: "/patients" },
+  { ic: "fa-user-md",      label: "Doctors",   path: "/doctors" },
+  { ic: "fa-comments",     label: "Messages",  path: "/messages",         badge: "3", badgeCoral: true },
+  { ic: "fa-chart-line",   label: "Analytics", path: "/analytics" },
+  { ic: "fa-file-alt",     label: "Content",   path: "#" },
+  { ic: "fa-cog",          label: "Settings",  path: "/settings/team" },
 ];
 
-const MOBILE_TABS: Array<{ ic: string; label: string; href?: string; key: AdminNavKey | "More"; badge?: number }> = [
-  { ic: "fa-calendar-day", label: "Today", href: "/admin/today", key: "Today" },
-  { ic: "fa-calendar-alt", label: "Calendar", href: "/admin/calendar", key: "Calendar" },
-  { ic: "fa-users", label: "Patients", href: "/admin/patients", key: "Patients" },
-  { ic: "fa-comments", label: "Messages", href: "/admin/messages", key: "Messages", badge: 3 },
-  { ic: "fa-ellipsis-h", label: "More", key: "More" },
+type MobileTabSpec = { ic: string; label: string; path?: string; key: AdminNavKey | "More"; badge?: number };
+
+const MOBILE_TABS: MobileTabSpec[] = [
+  { ic: "fa-calendar-day", label: "Today",    path: "/today",    key: "Today" },
+  { ic: "fa-calendar-alt", label: "Calendar", path: "/calendar", key: "Calendar" },
+  { ic: "fa-users",        label: "Patients", path: "/patients", key: "Patients" },
+  { ic: "fa-comments",     label: "Messages", path: "/messages", key: "Messages", badge: 3 },
+  { ic: "fa-ellipsis-h",   label: "More",                       key: "More" },
 ];
+
+/** Build an absolute admin URL given the active clinic slug. */
+function adminHref(slug: string, path: string): string {
+  if (path === "#") return "#";
+  return `/${slug}/admin${path}`;
+}
 
 function initialsOf(name: string): string {
   return name
@@ -61,9 +101,15 @@ function roleLabel(role: string | null): string {
 function ClinicSidebar({
   active,
   user,
+  clinic,
+  slug,
+  memberships,
 }: {
-  active: AdminNavKey;
-  user: SignedInClinicUser | null;
+  active:      AdminNavKey;
+  user:        SignedInClinicUser | null;
+  clinic:      ClinicHeader | null;
+  slug:        string;
+  memberships: ClinicMembership[];
 }) {
   const displayName = user?.displayName ?? "Signed in";
   const initials    = user?.displayName ? initialsOf(user.displayName) : "?";
@@ -71,14 +117,13 @@ function ClinicSidebar({
 
   return (
     <aside className="hidden w-60 flex-none flex-col bg-[#0a2742] p-3 text-[#c9d4df] md:flex">
-      <div className="mb-3.5 flex items-center gap-2.5 border-b border-white/10 px-2 pb-4 pt-1">
-        <span className="grid h-9 w-9 flex-none place-items-center rounded-md bg-brand text-[16px] text-white">
-          <i className="fas fa-tooth" />
-        </span>
-        <div>
-          <div className="text-[14px] font-semibold leading-4 text-white">Mahakur Poly</div>
-          <div className="text-[11px] text-[#8aa0b6]">Sambalpur · Admin</div>
-        </div>
+      <div className="mb-3.5">
+        <ClinicSwitcher
+          memberships={memberships}
+          currentSlug={slug}
+          currentCity={clinic?.city ?? null}
+          roleLabel={role}
+        />
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5">
@@ -87,7 +132,7 @@ function ClinicSidebar({
           return (
             <Link
               key={it.label}
-              href={it.href}
+              href={adminHref(slug, it.path)}
               className={
                 "relative flex items-center gap-3 rounded-md px-3 py-2.5 text-[14px] no-underline " +
                 (isActive
@@ -211,7 +256,7 @@ function ClinicTopBar({
   );
 }
 
-function ClinicMobileTabBar({ active }: { active: AdminNavKey }) {
+function ClinicMobileTabBar({ active, slug }: { active: AdminNavKey; slug: string }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-border bg-white pt-2 pb-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] md:hidden">
       {MOBILE_TABS.map((t) => {
@@ -227,8 +272,8 @@ function ClinicMobileTabBar({ active }: { active: AdminNavKey }) {
             )}
           </div>
         );
-        return t.href ? (
-          <Link key={t.label} href={t.href} className="cursor-pointer no-underline">
+        return t.path ? (
+          <Link key={t.label} href={adminHref(slug, t.path)} className="cursor-pointer no-underline">
             {content}
           </Link>
         ) : (
@@ -242,7 +287,7 @@ function ClinicMobileTabBar({ active }: { active: AdminNavKey }) {
 }
 
 type Props = {
-  active: AdminNavKey;
+  active:   AdminNavKey;
   children: React.ReactNode;
   topBarSubtitle?: string;
   dayLabel?: string;
@@ -250,18 +295,33 @@ type Props = {
 };
 
 export async function ClinicAppLayout({ active, children, topBarSubtitle, dayLabel, dateLabel }: Props) {
-  const [user, lookups] = await Promise.all([
+  const [user, lookups, memberships, urlSlug] = await Promise.all([
     getSignedInClinicUser(),
     getBookingLookups(),
+    getMyClinicMemberships(),
+    getActiveClinicSlug(),
   ]);
+  // The URL slug (set by middleware on /[slug]/admin/*) drives which clinic
+  // the sidebar shows. Pages don't have to pass it — every admin page lives
+  // under the same /[slug]/ root, so the header is always set when this
+  // layout renders.
+  const slug = urlSlug ?? memberships[0]?.slug ?? "";
+  const membership = memberships.find((m) => m.slug === slug);
+  const clinic     = membership ? await loadClinicHeader(membership.clinicId) : null;
   return (
     <div className="flex min-h-screen items-stretch bg-[#F4F5F7]">
-      <ClinicSidebar active={active} user={user} />
+      <ClinicSidebar
+        active={active}
+        user={user}
+        clinic={clinic}
+        slug={slug}
+        memberships={memberships}
+      />
       <div className="flex min-w-0 flex-1 flex-col">
         <ClinicTopBar subtitle={topBarSubtitle} dayLabel={dayLabel} dateLabel={dateLabel} lookups={lookups} />
         <main className="flex-1 pb-24 md:pb-10">{children}</main>
       </div>
-      <ClinicMobileTabBar active={active} />
+      <ClinicMobileTabBar active={active} slug={slug} />
     </div>
   );
 }

@@ -1,25 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { isReservedSlug } from "@/lib/routing/reserved-slugs";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 /**
- * Combines two concerns:
+ * Three concerns:
  *
- *   1. Tenant resolution — maps host/subdomain (or ?clinic= override in dev)
- *      to a clinic slug and stashes it on request headers so server components
- *      can read it. The DB lookup happens in src/lib/supabase/clinics.ts.
+ *   1. Tenant resolution (host → slug + URL → slug). Subdomain / custom
+ *      domain map to a clinic slug. The URL form `/[slug]/admin/...` also
+ *      carries the slug. Either way, we surface the active clinic slug via
+ *      the `x-active-clinic-slug` response header that
+ *      getCurrentStaffClinicId() reads server-side.
  *
- *   2. Supabase session refresh + auth gate — the @supabase/ssr middleware
- *      pattern. Reads cookies, refreshes the access token if needed, writes
- *      the new cookies back onto the response. Protected paths
- *      (/admin/*, /superadmin/*) require a signed-in user; otherwise we
- *      redirect to /login?next=<original>.
+ *   2. Subdomain → URL rewrite. When the slug came from the host (not the
+ *      URL), we internally rewrite `/admin/today` to `/[slug]/admin/today`
+ *      so the single `[clinicSlug]` route tree handles both apex and
+ *      subdomain. Browser URL stays clean.
  *
- * Resolution order (tenant):
- *   1. Custom domain (drmahakur.com)
- *   2. Subdomain     (mahakur.rxbooq.com)
- *   3. Apex          (rxbooq.com or local dev) — no tenant
+ *   3. Supabase session refresh + auth gate. Protected admin paths require
+ *      a signed-in user; otherwise redirect to /login?next=...
+ *
+ * Tenant resolution order (left wins):
+ *   1. URL path: `/[slug]/...` where slug is not reserved
+ *   2. Custom domain (clinics.custom_domain)
+ *   3. Subdomain    (mahakur.rxbooq.com)
+ *   4. Apex         (rxbooq.com or local dev) — no tenant
  */
 
 const APEX_HOSTS = new Set([
@@ -32,29 +38,61 @@ const APEX_HOSTS = new Set([
 
 const PLATFORM_DOMAIN = "rxbooq.com";
 
-function resolveTenantSlug(req: NextRequest): string | null {
+/** Extracts the first path segment if it looks like a clinic slug — otherwise null. */
+function extractUrlSlug(pathname: string): string | null {
+  const m = pathname.match(/^\/([a-z0-9][a-z0-9-]*)(?:\/|$)/);
+  if (!m) return null;
+  const seg = m[1]!;
+  if (isReservedSlug(seg)) return null;
+  return seg;
+}
+
+/** Resolves the tenant slug from host (subdomain or `?clinic=` dev override). Null on apex. */
+function resolveHostSlug(req: NextRequest): string | null {
   const host = req.headers.get("host")?.toLowerCase() ?? "";
-  if (APEX_HOSTS.has(host)) return null;
-
-  const devSlug =
-    process.env.NODE_ENV !== "production"
-      ? req.nextUrl.searchParams.get("clinic")
-      : null;
-  if (devSlug) return devSlug;
-
+  if (APEX_HOSTS.has(host)) {
+    // Dev convenience: `?clinic=foo` on apex acts like the subdomain.
+    if (process.env.NODE_ENV !== "production") {
+      return req.nextUrl.searchParams.get("clinic");
+    }
+    return null;
+  }
   if (host.endsWith(`.${PLATFORM_DOMAIN}`)) {
     return host.slice(0, -1 * (PLATFORM_DOMAIN.length + 1));
   }
+  // Custom domain lookup happens DB-side in getClinicByHostOrSlug; we just
+  // pass the host through and let downstream code resolve.
   return null;
 }
 
 function isProtectedPath(pathname: string): boolean {
-  return pathname.startsWith("/admin") || pathname.startsWith("/superadmin");
+  if (pathname.startsWith("/superadmin")) return true;
+  // /[slug]/admin/* — slug already validated as non-reserved by the regex.
+  return /^\/[a-z0-9][a-z0-9-]*\/admin(?:\/|$)/.test(pathname);
 }
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const host = req.headers.get("host")?.toLowerCase() ?? "";
+
+  // ---- Subdomain → URL rewrite ----------------------------------------------
+  // If the tenant comes from the host AND the URL hasn't already been
+  // prefixed with that slug, rewrite internally. The browser sees the clean
+  // URL; Next.js route matching uses the prefixed form.
+  const urlSlug  = extractUrlSlug(pathname);
+  const hostSlug = resolveHostSlug(req);
+
+  if (hostSlug && !urlSlug) {
+    const target = pathname === "/" ? `/${hostSlug}` : `/${hostSlug}${pathname}`;
+    const rewriteUrl = new URL(target + req.nextUrl.search, req.url);
+    const rewriteResponse = NextResponse.rewrite(rewriteUrl);
+    rewriteResponse.headers.set("x-active-clinic-slug", hostSlug);
+    if (host && !APEX_HOSTS.has(host)) rewriteResponse.headers.set("x-host", host);
+    return rewriteResponse;
+  }
+
+  // Active clinic for this request: URL wins, host falls back.
+  const activeSlug = urlSlug ?? hostSlug;
 
   // Start with a pass-through response that we'll attach cookies + headers to.
   let response = NextResponse.next({ request: req });
@@ -69,8 +107,6 @@ export async function middleware(req: NextRequest) {
           return req.cookies.getAll();
         },
         setAll(cookiesToSet: CookieToSet[]) {
-          // Update both the incoming request (so downstream RSCs read fresh
-          // cookies) and the outgoing response (so the browser stores them).
           cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
           response = NextResponse.next({ request: req });
           cookiesToSet.forEach(({ name, value, options }) =>
@@ -81,8 +117,6 @@ export async function middleware(req: NextRequest) {
     },
   );
 
-  // getUser() validates the token with the Supabase server and refreshes if
-  // needed. Cheap when the token is fresh.
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -94,10 +128,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // ---- Tenant resolution headers (preserve previous behavior) -------------
-  const slug = resolveTenantSlug(req);
-  if (slug) {
-    response.headers.set("x-clinic-slug", slug);
+  // ---- Active-clinic header ----------------------------------------------
+  // Read by getCurrentStaffClinicId() and any data loader that needs to know
+  // which clinic the user is acting in for the current request.
+  if (activeSlug) {
+    response.headers.set("x-active-clinic-slug", activeSlug);
+  }
+
+  // Legacy header (used by getCurrentClinic() / loadClinicForPublicPage in
+  // the per-clinic public page rendering path). Keep populated from host
+  // resolution only — the URL-slug case is handled by params in the page.
+  if (hostSlug) {
+    response.headers.set("x-clinic-slug", hostSlug);
   }
   if (host && !APEX_HOSTS.has(host)) {
     response.headers.set("x-host", host);

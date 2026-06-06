@@ -23,7 +23,7 @@ export function ClinicSiteHeader({ clinicName, clinicSlug, isTenantRoot }: Props
     <nav className="sticky top-0 z-30 flex h-16 items-center border-b border-border bg-white md:h-[72px]">
       <div className="mx-auto flex w-full max-w-[1200px] items-center gap-3 px-4 md:gap-8 md:px-8">
         <Link
-          href={isTenantRoot ? "/" : `/d/${clinicSlug}`}
+          href={isTenantRoot ? "/" : `/${clinicSlug}`}
           className="flex items-center gap-2 text-[16px] font-bold leading-tight text-heading no-underline md:gap-2.5 md:text-[18px]"
         >
           <span className="grid h-8 w-8 flex-none place-items-center rounded-md bg-brand text-[14px] text-white md:h-9 md:w-9 md:text-[16px]">

@@ -2,10 +2,12 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useMemo } from "react";
 import { BlockDatesDialog } from "@/components/molecules/BlockDatesDialog";
 import { DoctorScheduleGrid } from "@/components/molecules/DoctorScheduleGrid";
 import { EditDoctorDialog } from "@/components/molecules/EditDoctorDialog";
+import { EditScheduleDialog } from "@/components/molecules/EditScheduleDialog";
 import { TEL_HREF, waLink } from "@/lib/contact";
 import {
   BOOKING_SERVICES,
@@ -32,6 +34,8 @@ const TABS: Array<{ value: string; label: string; icon: string }> = [
 ];
 
 export function DoctorProfile({ doctor }: Props) {
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   const status = STATUS_META[doctor.status];
 
   // WhatsApp link to the doctor if their phone is on file, else to the clinic.
@@ -49,7 +53,7 @@ export function DoctorProfile({ doctor }: Props) {
     <div className="px-5 pt-5 md:px-8 md:pt-6">
       {/* Breadcrumb */}
       <div className="mb-3 text-[12px] text-muted">
-        <Link href="/admin/doctors" className="text-link-hover no-underline">Doctors</Link>
+        <Link href={`/${slug}/admin/doctors`} className="text-link-hover no-underline">Doctors</Link>
         <i className="fas fa-chevron-right mx-1.5 text-[9px] text-[#cdd9e4]" />
         <span>{doctor.name}</span>
       </div>
@@ -282,24 +286,37 @@ export function DoctorProfile({ doctor }: Props) {
                 These hours feed the booking flow. {summariseSchedule(doctor.schedule)}.
               </p>
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-md border-[1.5px] border-link-hover bg-white px-3.5 py-1.5 text-[13px] font-medium text-link-hover hover:bg-link-hover hover:text-white"
-            >
-              <i className="fas fa-pen text-[10px]" /> Edit hours
-            </button>
+            <EditScheduleDialog
+              doctorId={doctor.id}
+              doctorName={doctor.name}
+              initialSchedule={doctor.schedule}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border-[1.5px] border-link-hover bg-white px-3.5 py-1.5 text-[13px] font-medium text-link-hover hover:bg-link-hover hover:text-white"
+                >
+                  <i className="fas fa-pen text-[10px]" /> Edit hours
+                </button>
+              }
+            />
           </div>
           <DoctorScheduleGrid schedule={doctor.schedule} />
 
           <div className="mt-4 rounded-[12px] border border-border bg-white p-5">
             <h3 className="text-[14px] font-semibold uppercase tracking-[0.06em] text-[#9aa9b8]">Upcoming exceptions</h3>
             <p className="mt-2 text-[13px] italic text-muted">No leave or special hours scheduled.</p>
-            <button
-              type="button"
-              className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-white px-3 py-1.5 text-[12px] font-medium text-heading hover:border-link-hover"
-            >
-              <i className="fas fa-plus text-[10px]" /> Add leave or extra hours
-            </button>
+            <BlockDatesDialog
+              doctorId={doctor.id}
+              doctorName={doctor.name}
+              trigger={
+                <button
+                  type="button"
+                  className="mt-3 inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-white px-3 py-1.5 text-[12px] font-medium text-heading hover:border-link-hover"
+                >
+                  <i className="fas fa-plus text-[10px]" /> Add leave or extra hours
+                </button>
+              }
+            />
           </div>
         </Tabs.Content>
 
@@ -370,7 +387,7 @@ export function DoctorProfile({ doctor }: Props) {
                 </p>
               </div>
               <Link
-                href={`/admin/patients?doctor=${doctor.id}`}
+                href={`/${slug}/admin/patients?doctor=${doctor.id}`}
                 className="text-[13px] text-link-hover no-underline"
               >
                 View all in Patients →
@@ -383,7 +400,7 @@ export function DoctorProfile({ doctor }: Props) {
                 {patientsSeen.map((p) => (
                   <Link
                     key={p.id}
-                    href={`/admin/patients/${p.id}`}
+                    href={`/${slug}/admin/patients/${p.id}`}
                     className="flex items-center gap-3 px-5 py-3.5 no-underline hover:bg-[#FAFAFB]"
                   >
                     <span

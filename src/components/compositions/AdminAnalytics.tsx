@@ -3,7 +3,7 @@
 // Admin · /admin/analytics — KPI strip, line chart, top services, language donut, microsite, no-show table
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import type {
   AdminAnalyticsData,
@@ -375,6 +375,8 @@ function FilterBar({
 }
 
 function NoShowTable({ rows }: { rows: NoShowRow[] }) {
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   return (
     <div className="overflow-hidden rounded-[12px] border border-border bg-white">
       <div className="flex items-baseline justify-between border-b border-border px-5 py-4">
@@ -429,7 +431,7 @@ function NoShowTable({ rows }: { rows: NoShowRow[] }) {
               <td className="px-4 py-3 text-[13px] text-muted">{p.last}</td>
               <td className="px-4 py-3 text-right">
                 <Link
-                  href="/admin/messages"
+                  href={`/${slug}/admin/messages`}
                   className="inline-flex items-center gap-1.5 rounded-md bg-cta px-3.5 py-1.5 text-[13px] font-medium text-cta-fg no-underline hover:bg-[#d92843]"
                 >
                   <i className="fab fa-whatsapp text-[12px]" /> Send reminder
@@ -444,9 +446,11 @@ function NoShowTable({ rows }: { rows: NoShowRow[] }) {
 }
 
 export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
-  const router = useRouter();
+  const router       = useRouter();
   const searchParams = useSearchParams();
-  const period = data.period;
+  const routeParams  = useParams<{ clinicSlug: string }>();
+  const slug         = routeParams?.clinicSlug ?? "";
+  const period       = data.period;
 
   // Doctor + service filters are URL-driven; the page reads them and re-fetches
   // with the filter applied at the query layer.
@@ -477,7 +481,7 @@ export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
     } else {
       params.set("period", next);
     }
-    router.push(`/admin/analytics?${params.toString()}`);
+    router.push(`/${slug}/admin/analytics?${params.toString()}`);
   };
   const setDoctor  = (next: string) => updateParam("doctor", next);
   const setService = (next: string) => updateParam("service", next);
@@ -485,7 +489,7 @@ export function AdminAnalytics({ data }: { data: AdminAnalyticsData }) {
     const params = new URLSearchParams(Array.from(searchParams.entries()));
     if (!value || value === "all") params.delete(key);
     else params.set(key, value);
-    router.push(`/admin/analytics?${params.toString()}`);
+    router.push(`/${slug}/admin/analytics?${params.toString()}`);
   }
 
   const k = data.kpis;

@@ -29,6 +29,7 @@ import {
   uploadOnboardingDoc,
   type OnboardingDocKind,
 } from "@/lib/supabase/storage";
+import { isReservedSlug } from "@/lib/routing/reserved-slugs";
 
 // =============================================================================
 // Shared validators
@@ -279,6 +280,117 @@ type DraftRow = {
 };
 
 // =============================================================================
+// Slug availability — used by the practice-step UI on blur AND by
+// saveOnboardingStepAction as a server-side guard so a stale form can't
+// bypass and trip the unique-index violation at activate time.
+// =============================================================================
+
+const slugShape = z.string().trim().min(2).max(60).regex(
+  /^[a-z0-9][a-z0-9-]*[a-z0-9]$/,
+  "Use lowercase letters, digits, and hyphens.",
+);
+
+export type SlugAvailability =
+  | { ok: true; available: true }
+  | { ok: true; available: false; reason: string; suggestion?: string }
+  | { ok: false; error: string };
+
+function slugify(s: string): string {
+  return s.toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 60);
+}
+
+/**
+ * Check whether a slug is free to claim. Considers:
+ *   - Shape (kebab-case via Zod)
+ *   - Reserved top-level segments (login, pricing, get-started, …)
+ *   - Existing `clinics.slug` rows
+ *   - In-flight onboarding drafts that suggested the same slug (status='draft'
+ *     or 'pending') — exclude the caller's own draft so they can re-submit
+ *     the same slug without seeing it as "taken by them".
+ *
+ * If taken, returns a suggestion: tries `${base}-${citySlug}` if `cityHint` is
+ * supplied and not already part of the base, else `${base}-2`, `-3`, … until
+ * one is free (max 9 attempts — beyond that the user picks manually).
+ */
+export async function checkSlugAvailabilityAction(
+  rawSlug:   string,
+  cityHint?: string,
+): Promise<SlugAvailability> {
+  const parsed = slugShape.safeParse(rawSlug);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid slug" };
+  }
+  const slug = parsed.data;
+
+  if (isReservedSlug(slug)) {
+    return { ok: true, available: false, reason: `"${slug}" is reserved by the platform — pick another.` };
+  }
+
+  const supabase = serviceClient();
+  const cookieClaim = await loadDraftFromCookie();
+  const myDraftId   = cookieClaim?.draft.id ?? null;
+
+  // Resolve in parallel.
+  const [{ data: clinicHit }, { data: draftHits }] = await Promise.all([
+    supabase
+      .from("clinics")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle(),
+    supabase
+      .from("clinic_applications")
+      .select("id")
+      .eq("suggested_slug", slug)
+      .in("status", ["draft", "pending"]),
+  ]);
+
+  const draftCollision = (draftHits ?? []).some((d) => d.id !== myDraftId);
+
+  if (clinicHit || draftCollision) {
+    const suggestion = await pickAvailableSuggestion(slug, cityHint);
+    return {
+      ok:        true,
+      available: false,
+      reason:    `"${slug}" is already taken.`,
+      suggestion,
+    };
+  }
+
+  return { ok: true, available: true };
+}
+
+async function pickAvailableSuggestion(base: string, cityHint?: string): Promise<string | undefined> {
+  const supabase = serviceClient();
+  const candidates: string[] = [];
+
+  if (cityHint) {
+    const citySlug = slugify(cityHint);
+    if (citySlug && !base.includes(citySlug)) {
+      candidates.push(`${base}-${citySlug}`.slice(0, 60));
+    }
+  }
+  for (let i = 2; i <= 9; i++) candidates.push(`${base}-${i}`.slice(0, 60));
+
+  for (const c of candidates) {
+    if (isReservedSlug(c)) continue;
+    const [{ data: clinicHit }, { data: draftHits }] = await Promise.all([
+      supabase.from("clinics").select("id").eq("slug", c).maybeSingle(),
+      supabase
+        .from("clinic_applications")
+        .select("id")
+        .eq("suggested_slug", c)
+        .in("status", ["draft", "pending"])
+        .limit(1),
+    ]);
+    if (!clinicHit && (draftHits ?? []).length === 0) return c;
+  }
+  return undefined;
+}
+
+// =============================================================================
 // 3. saveOnboardingStepAction — partial update keyed off the cookie.
 // =============================================================================
 
@@ -325,6 +437,25 @@ export async function saveOnboardingStepAction(input: SaveStepInput): Promise<Sa
 
   const loaded = await loadDraftFromCookie();
   if (!loaded) return { ok: false, error: "Session expired. Verify your phone again." };
+
+  // Server-side slug-availability guard. The UI runs this check on-blur for
+  // fast feedback; we run it again here so a stale form (or someone bypassing
+  // the UI) can't slip a taken slug through and trip activate_clinic_application's
+  // unique-key violation later.
+  if (parsed.data.suggested_slug && parsed.data.suggested_slug !== loaded.draft.suggested_slug) {
+    const check = await checkSlugAvailabilityAction(
+      parsed.data.suggested_slug,
+      parsed.data.city ?? loaded.draft.city ?? undefined,
+    );
+    if (check.ok && !check.available) {
+      return {
+        ok:    false,
+        error: check.suggestion
+          ? `${check.reason} Try "${check.suggestion}".`
+          : check.reason,
+      };
+    }
+  }
 
   const supabase = serviceClient();
   const { error } = await supabase
@@ -505,7 +636,7 @@ const finalizeSchema = z.object({
 
 export type FinalizeInput  = z.infer<typeof finalizeSchema>;
 export type FinalizeResult =
-  | { ok: true; clinicId: string }
+  | { ok: true; clinicId: string; clinicSlug: string }
   | { ok: false; error: string };
 
 export async function finalizeOnboardingAction(input: FinalizeInput): Promise<FinalizeResult> {
@@ -588,5 +719,17 @@ export async function finalizeOnboardingAction(input: FinalizeInput): Promise<Fi
   const cookieStore = await cookies();
   cookieStore.delete(COOKIE_NAME);
 
-  return { ok: true, clinicId: clinicId as string };
+  // 5. Resolve the clinic's slug so the caller can redirect to /[slug]/admin/today.
+  //    The activation RPC returns the new clinic_id; we look up its slug here.
+  const { data: clinicRow } = await supabase
+    .from("clinics")
+    .select("slug")
+    .eq("id", clinicId as string)
+    .maybeSingle();
+
+  return {
+    ok:         true,
+    clinicId:   clinicId as string,
+    clinicSlug: clinicRow?.slug ?? draft.suggested_slug!,
+  };
 }

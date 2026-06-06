@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { createPatientAction } from "@/app/(clinic-app)/admin/patients/actions";
+import { createPatientAction } from "@/app/(clinic-app)/[clinicSlug]/admin/patients/actions";
 
 type Props = {
   trigger: React.ReactNode;

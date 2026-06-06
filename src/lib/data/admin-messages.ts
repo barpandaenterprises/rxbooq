@@ -7,6 +7,7 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 import { useMockData } from "@/lib/feature-flags";
 
 export type ThreadStatus = "delivered" | "read" | "replied" | "failed" | "optout";
@@ -182,6 +183,9 @@ type DbMessage = {
 };
 
 async function getLiveThreads(): Promise<Thread[]> {
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) return [];
+
   const supabase = await serverClient();
 
   const { data: rows, error } = await supabase
@@ -190,6 +194,7 @@ async function getLiveThreads(): Promise<Thread[]> {
       id, patient_id, template_name, direction, payload, status, error, created_at,
       patient:patients ( full_name, phone_e164, whatsapp_opt_in )
     `)
+    .eq("clinic_id", clinicId)
     .order("created_at", { ascending: true });
 
   if (error) {

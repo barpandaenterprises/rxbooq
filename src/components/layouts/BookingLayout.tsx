@@ -2,11 +2,18 @@ import Link from "next/link";
 
 type Props = {
   children: React.ReactNode;
+  /** Clinic name shown in the top-bar brand. Required so the booking surface
+   *  carries the tenant's identity instead of the legacy hardcoded clinic. */
+  clinicName: string;
+  /** Where the brand mark clicks back to. Defaults to the clinic's public
+   *  profile (/d/{slug}) when supplied; otherwise to the platform home. */
+  clinicSlug?: string;
   /** Tailwind max-w utility for the top-bar / trust-footer container width.
-   *  Defaults to "max-w-[720px]" (matches steps 1–3); use "max-w-[1080px]" for the wider success layout. */
+   *  Defaults to "max-w-[720px]" (matches steps 1–3); use "max-w-[1080px]"
+   *  for the wider success layout. */
   widthClass?: string;
   /** Optional override for the right-side action in the top bar.
-   *  Defaults to the "Need help? +91 …" phone link. */
+   *  Defaults to the platform support phone link. */
   headerAction?: React.ReactNode;
 };
 
@@ -22,22 +29,24 @@ const DEFAULT_HEADER_ACTION = (
 
 export function BookingLayout({
   children,
+  clinicName,
+  clinicSlug,
   widthClass = "max-w-[720px]",
   headerAction = DEFAULT_HEADER_ACTION,
 }: Props) {
+  const homeHref = clinicSlug ? `/${clinicSlug}` : "/";
   return (
     <div className="min-h-screen bg-surface-muted px-4 py-8 md:px-0 md:py-14">
       {/* Mini top bar */}
       <div className={`mx-auto mb-6 flex items-center justify-between ${widthClass}`}>
         <Link
-          href="/"
+          href={homeHref}
           className="flex items-center gap-2.5 text-[16px] font-semibold text-heading no-underline"
         >
           <span className="grid h-9 w-9 place-items-center rounded-md bg-brand text-[18px] text-white">
-            <i className="fas fa-tooth" />
+            <i className="fas fa-clinic-medical" />
           </span>
-          <span className="hidden md:inline">Mahakur Poly Dental</span>
-          <span className="text-[14px] md:hidden">Mahakur Poly Dental</span>
+          <span className="truncate">{clinicName}</span>
         </Link>
 
         {headerAction}

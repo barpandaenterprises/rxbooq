@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -18,7 +18,7 @@ import {
   getPublicDoctorSlotsForDateAction,
   getPublicDoctorWorkingDatesAction,
   getPublicDoctorsForSlotAction,
-} from "@/app/book/actions";
+} from "@/app/(clinic-app)/[clinicSlug]/book/actions";
 import {
   slotsInWindows,
   subtractBooked,
@@ -101,6 +101,8 @@ type Props = {
 
 export function BookingComposer({ clinicName, doctors, departments }: Props) {
   const router = useRouter();
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -271,7 +273,7 @@ export function BookingComposer({ clinicName, doctors, departments }: Props) {
         ref:    result.bookingRef,
         id:     result.appointmentId,
       });
-      router.push(`/book/success?${params.toString()}`);
+      router.push(`/${slug}/book/success?${params.toString()}`);
     });
   };
 

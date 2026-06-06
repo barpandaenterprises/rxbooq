@@ -10,6 +10,7 @@
 
 import { serverClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/feature-flags";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 import {
   DOCTORS,
   WEEKDAYS,
@@ -137,19 +138,26 @@ function coerceLocales(langs: string[] | null): Locale[] {
 }
 
 async function getLiveDoctors(): Promise<Doctor[]> {
-  const supabase = await serverClient();
+  // Explicit clinic_id filter (defense-in-depth). RLS already scopes for
+  // regular clinic staff, but superadmins-who-are-also-clinic-admins would
+  // bypass that gate and see every clinic's doctors here. The explicit filter
+  // makes the admin app properly tenant-scoped regardless of platform role.
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) return [];
 
-  // RLS auto-scopes both queries to the signed-in user's clinic.
+  const supabase = await serverClient();
   const [{ data: docRows, error: dErr }, { data: availRows }] = await Promise.all([
     supabase
       .from("doctors")
       .select(
         "id, display_name, qualifications, bio, photo_url, registration_no, display_order, is_active, created_at, years_experience, trained_at, phone, email, primary_specialty, visiting, visiting_note, status, languages, department_id",
       )
+      .eq("clinic_id", clinicId)
       .order("display_order", { ascending: true }),
     supabase
       .from("doctor_availability")
-      .select("doctor_id, weekday, start_time, end_time"),
+      .select("doctor_id, weekday, start_time, end_time")
+      .eq("clinic_id", clinicId),
   ]);
 
   if (dErr) {

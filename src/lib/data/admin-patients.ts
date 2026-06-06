@@ -10,6 +10,7 @@
 
 import { serverClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/feature-flags";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 
 // =============================================================================
 // Canonical type (matches AdminPatients UI expectations)
@@ -144,17 +145,22 @@ type DbAppointment = {
 };
 
 async function getLivePatients(): Promise<PatientRow[]> {
-  const supabase = await serverClient();
+  // Explicit clinic scope — see getCurrentStaffClinicId comment for why we
+  // can't rely on RLS alone here (superadmin bypass).
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) return [];
 
-  // RLS auto-scopes both queries to the signed-in user's clinic.
+  const supabase = await serverClient();
   const [{ data: patientRows, error: pErr }, { data: apptRows }] = await Promise.all([
     supabase
       .from("patients")
       .select("id, full_name, phone_e164, language, whatsapp_opt_in, tags, created_at")
+      .eq("clinic_id", clinicId)
       .order("created_at", { ascending: false }),
     supabase
       .from("appointments")
-      .select("patient_id, starts_at, status"),
+      .select("patient_id, starts_at, status")
+      .eq("clinic_id", clinicId),
   ]);
 
   if (pErr) {

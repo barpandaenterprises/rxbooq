@@ -14,6 +14,7 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 import { useMockData } from "@/lib/feature-flags";
 
 export type AnalyticsPeriod = "7d" | "30d" | "90d";
@@ -224,6 +225,11 @@ async function getLiveAnalytics(
   doctorId:  string | null,
   serviceId: string | null,
 ): Promise<AdminAnalyticsData> {
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) {
+    return emptyAnalytics();
+  }
+
   const supabase = await serverClient();
   const days     = daysFor(period);
   const now      = Date.now();
@@ -238,6 +244,7 @@ async function getLiveAnalytics(
   let apptQ = supabase
     .from("appointments")
     .select("starts_at, status, source, doctor_id")
+    .eq("clinic_id", clinicId)
     .gte("starts_at", new Date(prevStartMs).toISOString());
   if (doctorId) apptQ = apptQ.eq("doctor_id", doctorId);
 
@@ -245,10 +252,12 @@ async function getLiveAnalytics(
     apptQ,
     supabase
       .from("patients")
-      .select("created_at, language"),
+      .select("created_at, language")
+      .eq("clinic_id", clinicId),
     supabase
       .from("doctors")
       .select("id, display_name")
+      .eq("clinic_id", clinicId)
       .eq("is_active", true)
       .order("display_order", { ascending: true }),
   ]);
@@ -361,6 +370,7 @@ async function getLiveAnalytics(
   const { data: noShowAppts } = await supabase
     .from("appointments")
     .select("starts_at, patient:patients(id, full_name)")
+    .eq("clinic_id", clinicId)
     .eq("status", "no_show")
     .gte("starts_at", new Date(startMs).toISOString())
     .order("starts_at", { ascending: false });
@@ -406,6 +416,32 @@ async function getLiveAnalytics(
     topServices,
     languageMix,
     noShows,
+    microsite:        MICROSITE,
+  };
+}
+
+function emptyAnalytics(): AdminAnalyticsData {
+  // Returned when the signed-in user has no clinic linkage — happens for
+  // pure superadmins browsing /admin/analytics without a clinic_users row.
+  const today = new Date().toISOString().slice(0, 10);
+  const zeroKpi = { value: "0", rawValue: 0, deltaPct: 0, deltaLabel: "+0", deltaUp: true };
+  return {
+    period:           "7d",
+    windowStart:      today,
+    windowEnd:        today,
+    filters:          { doctorId: null, serviceId: null },
+    doctorOptions:    [],
+    serviceOptions:   [],
+    kpis: {
+      newPatients: zeroKpi,
+      bookings:    zeroKpi,
+      noShowRate:  { ...zeroKpi, value: "0%" },
+      revenue:     { ...zeroKpi, value: "₹0" },
+    },
+    bookingTimeline:  [],
+    topServices:      [],
+    languageMix:      [],
+    noShows:          [],
     microsite:        MICROSITE,
   };
 }

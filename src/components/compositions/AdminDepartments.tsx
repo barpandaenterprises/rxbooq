@@ -11,7 +11,7 @@ import {
   deactivateDepartmentAction,
   reactivateDepartmentAction,
   updateDepartmentAction,
-} from "@/app/(clinic-app)/admin/settings/departments/actions";
+} from "@/app/(clinic-app)/[clinicSlug]/admin/settings/departments/actions";
 import type { Department } from "@/lib/data/departments";
 
 const createSchema = z.object({

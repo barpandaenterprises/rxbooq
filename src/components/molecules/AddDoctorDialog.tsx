@@ -2,11 +2,11 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { addDoctorAction, type AddDoctorScheduleRow } from "@/app/(clinic-app)/admin/doctors/actions";
+import { addDoctorAction, type AddDoctorScheduleRow } from "@/app/(clinic-app)/[clinicSlug]/admin/doctors/actions";
 import { DoctorPhotoField, fileToDataUrl } from "@/components/molecules/DoctorPhotoField";
 import type { Department } from "@/lib/data/departments";
 import {
@@ -109,6 +109,8 @@ const DEFAULT_VALUES: DoctorFormValues = {
 
 export function AddDoctorDialog({ trigger, departments = [] }: Props) {
   const router = useRouter();
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -282,7 +284,7 @@ export function AddDoctorDialog({ trigger, departments = [] }: Props) {
                     </select>
                     {departments.length === 0 && (
                       <p className="mt-1 text-[11px] text-[#9aa9b8]">
-                        No departments yet — add one in <a href="/admin/settings/departments" className="text-link-hover hover:underline">Settings → Departments</a>.
+                        No departments yet — add one in <a href={`/${slug}/admin/settings/departments`} className="text-link-hover hover:underline">Settings → Departments</a>.
                       </p>
                     )}
                   </Field>

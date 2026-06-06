@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { sendInboxReplyAction } from "@/app/(clinic-app)/admin/messages/actions";
+import { sendInboxReplyAction } from "@/app/(clinic-app)/[clinicSlug]/admin/messages/actions";
 import { BroadcastDialog } from "@/components/molecules/BroadcastDialog";
 import { WaTemplatesDialog } from "@/components/molecules/WaTemplatesDialog";
 import type { Bubble, Thread, ThreadStatus } from "@/lib/data/admin-messages";

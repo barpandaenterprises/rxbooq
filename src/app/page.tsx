@@ -1,7 +1,4 @@
 import type { Metadata } from "next";
-import { getCurrentClinic } from "@/lib/booking/current-clinic";
-import { loadClinicForPublicPage } from "@/lib/data/public-clinic-page";
-import { ClinicHomePage } from "@/components/compositions/ClinicHomePage";
 
 import { PlatformSiteLayout } from "@/components/layouts/PlatformSiteLayout";
 import { PlatformHero } from "@/components/compositions/PlatformHero";
@@ -13,10 +10,15 @@ import { PlatformTestimonials } from "@/components/compositions/PlatformTestimon
 import { PlatformCtaStrip } from "@/components/compositions/PlatformCtaStrip";
 
 /**
- * Apex + tenant dispatcher.
- *   - Apex (no tenant resolved): platform marketing site.
- *   - Tenant (subdomain / custom domain): the rich per-clinic page,
- *     same component used at /d/{slug}.
+ * Apex root — platform marketing site only.
+ *
+ * Tenant rendering used to live here too (we dispatched based on a tenant
+ * header). After the URL-driven multi-clinic refactor, tenant context lives
+ * exclusively at /[clinicSlug]/page.tsx, reached via either:
+ *   - Direct apex URL: rxbooq.com/panda  (matches the dynamic segment)
+ *   - Subdomain rewrite: panda.rxbooq.com/  → middleware rewrites to /panda/
+ *
+ * So this page no longer needs the tenant branch.
  */
 
 export const metadata: Metadata = {
@@ -29,21 +31,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function Home() {
-  // Tenant resolution comes from middleware-set headers. On the bare apex this
-  // returns null and we render the platform marketing site.
-  const tenant = await getCurrentClinic();
-
-  if (tenant) {
-    const page = await loadClinicForPublicPage({ id: tenant.id });
-    if (page) {
-      return <ClinicHomePage page={page} isTenantRoot />;
-    }
-    // Fall through to platform marketing if the tenant row is present but the
-    // public-page join (clinic_applications status='active') hasn't landed
-    // yet. Rare, but possible right after activation in dev.
-  }
-
+export default function Home() {
   return (
     <PlatformSiteLayout>
       <PlatformHero />

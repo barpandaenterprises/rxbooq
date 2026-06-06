@@ -12,6 +12,7 @@
 
 import { serverClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/feature-flags";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 
 // =============================================================================
 // Canonical types — AdminToday renders against these
@@ -167,11 +168,16 @@ function groupByHour(items: ApptItem[]): ApptHourGroup[] {
 // =============================================================================
 
 async function getLiveAdminTodayData(): Promise<AdminTodayData> {
+  // Explicit clinic scope — defense-in-depth against RLS superadmin bypass.
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) {
+    return { appointments: [], doctors: [], waActivity: [], kpis: emptyKpis() };
+  }
+
   const supabase = await serverClient();
   const start    = startOfTodayIST();
   const end      = new Date(start.getTime() + 24 * 60 * 60 * 1000);
 
-  // RLS scopes the result to the signed-in user's clinic.
   const { data: rows, error } = await supabase
     .from("appointments")
     .select(`
@@ -179,6 +185,7 @@ async function getLiveAdminTodayData(): Promise<AdminTodayData> {
       patient:patients ( full_name, phone_e164 ),
       doctor:doctors  ( display_name )
     `)
+    .eq("clinic_id", clinicId)
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString())
     .order("starts_at", { ascending: true });
@@ -212,12 +219,13 @@ async function getLiveAdminTodayData(): Promise<AdminTodayData> {
   const { data: doctorRows } = await supabase
     .from("doctors")
     .select("display_name")
+    .eq("clinic_id", clinicId)
     .eq("is_active", true)
     .order("display_order", { ascending: true });
 
   const doctors = (doctorRows ?? []).map((d) => d.display_name);
 
-  const kpis = await getLiveKpis(supabase);
+  const kpis = await getLiveKpis(supabase, clinicId);
 
   return {
     appointments: groupByHour(items),
@@ -262,16 +270,17 @@ function countByDay(rows: { starts_at?: string; created_at?: string }[], dayKey:
 
 async function getLiveKpis(
   supabase: Awaited<ReturnType<typeof serverClient>>,
+  clinicId: string,
 ): Promise<AdminTodayKpis> {
   const now              = Date.now();
   const sevenDaysMs      = 7  * 86_400_000;
-  const sevenDaysAgo     = new Date(now -      sevenDaysMs).toISOString();
   const fourteenDaysAgo  = new Date(now - 2 * sevenDaysMs).toISOString();
 
   // ---- No-shows in the last 7d + previous 7d (single query covers both) ----
   const { data: noShowRows } = await supabase
     .from("appointments")
     .select("starts_at, status")
+    .eq("clinic_id", clinicId)
     .eq("status", "no_show")
     .gte("starts_at", fourteenDaysAgo)
     .lt("starts_at",  new Date(now).toISOString());
@@ -289,6 +298,7 @@ async function getLiveKpis(
   const { data: patientRows } = await supabase
     .from("patients")
     .select("created_at")
+    .eq("clinic_id", clinicId)
     .gte("created_at", fourteenDaysAgo);
 
   const newPatientsCurrent = (patientRows ?? []).filter((r) => new Date(r.created_at).getTime() >= cutoff7Ms).length;

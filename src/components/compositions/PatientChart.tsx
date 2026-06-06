@@ -2,8 +2,9 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { getAttachmentSignedUrlAction } from "@/app/(clinic-app)/admin/attachments/actions";
+import { getAttachmentSignedUrlAction } from "@/app/(clinic-app)/[clinicSlug]/admin/attachments/actions";
 import { MedicalAlertsBanner } from "@/components/molecules/MedicalAlertsBanner";
 import { PrescriptionDialog } from "@/components/molecules/PrescriptionDialog";
 import { RxEntryDialog } from "@/components/molecules/RxEntryDialog";
@@ -48,6 +49,8 @@ const TAG_COLOR: Record<string, { bg: string; fg: string }> = {
 };
 
 export function PatientChart({ chart }: Props) {
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   const { patient, medicalHistory, visits, communications, billing } = chart;
   const [openRx, setOpenRx] = useState<Prescription | null>(null);
   const [fileFilter, setFileFilter] = useState<AttachmentKind | "all">("all");
@@ -85,7 +88,7 @@ export function PatientChart({ chart }: Props) {
     <div className="px-5 pt-5 md:px-8 md:pt-6">
       {/* Breadcrumb */}
       <div className="mb-3 text-[12px] text-muted">
-        <Link href="/admin/patients" className="text-link-hover no-underline">Patients</Link>
+        <Link href={`/${slug}/admin/patients`} className="text-link-hover no-underline">Patients</Link>
         <i className="fas fa-chevron-right mx-1.5 text-[9px] text-[#cdd9e4]" />
         <span>{patient.name}</span>
       </div>
@@ -163,7 +166,7 @@ export function PatientChart({ chart }: Props) {
           {/* Quick action cluster */}
           <div className="flex flex-wrap gap-2">
             <Link
-              href={`/book?patient=${patient.id}`}
+              href={`/${slug}/book?patient=${patient.id}`}
               className="inline-flex items-center gap-2 rounded-md bg-cta px-3.5 py-2 text-[13px] font-medium text-cta-fg no-underline hover:bg-[#d92843]"
             >
               <i className="fas fa-calendar-plus text-[11px]" /> New appointment
@@ -381,7 +384,7 @@ export function PatientChart({ chart }: Props) {
               {communications.map((c, i) => (
                 <Link
                   key={c.threadId + i}
-                  href="/admin/messages"
+                  href={`/${slug}/admin/messages`}
                   className="flex items-center gap-3 border-b border-[#F4F5F7] px-4 py-3.5 no-underline last:border-b-0 hover:bg-[#FAFAFB]"
                 >
                   <span className="grid h-9 w-9 flex-none place-items-center rounded-pill bg-[#E6F4EC] text-[14px] text-[#25D366]">
@@ -398,7 +401,7 @@ export function PatientChart({ chart }: Props) {
                 </Link>
               ))}
               <div className="px-4 py-3 text-center">
-                <Link href="/admin/messages" className="text-[13px] text-link-hover no-underline">
+                <Link href={`/${slug}/admin/messages`} className="text-[13px] text-link-hover no-underline">
                   Open full inbox <i className="fas fa-arrow-right ml-1 text-[10px]" />
                 </Link>
               </div>

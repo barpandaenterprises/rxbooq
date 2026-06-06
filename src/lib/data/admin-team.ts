@@ -5,6 +5,7 @@
 
 import { serverClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/feature-flags";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 
 export type ClinicUserRole = "clinic_admin" | "doctor" | "receptionist";
 
@@ -38,16 +39,19 @@ type Row = {
 export async function getAdminTeamData(): Promise<TeamMember[]> {
   if (useMockData()) return MOCK_TEAM;
 
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) return [];
+
   const supabase = await serverClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   const myAuthId = user?.id ?? "";
 
-  // RLS scopes the rows to the caller's clinic.
   const { data, error } = await supabase
     .from("clinic_users")
     .select("id, auth_user_id, email, display_name, role, phone, created_at")
+    .eq("clinic_id", clinicId)
     .order("created_at", { ascending: true });
 
   if (error) {

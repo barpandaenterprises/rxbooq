@@ -12,6 +12,7 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 import { useMockData } from "@/lib/feature-flags";
 import {
   findChart,
@@ -127,12 +128,19 @@ type DbPatient = {
 };
 
 async function getLivePatientChart(patientId: string): Promise<Chart | null> {
+  // Scope the initial lookup to the caller's clinic. The downstream joined
+  // queries are then implicitly clinic-scoped because they're keyed by
+  // patient_id, and the patient row itself is now confirmed in this clinic.
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) return null;
+
   const supabase = await serverClient();
 
   const { data: p, error: pErr } = await supabase
     .from("patients")
     .select("id, full_name, phone_e164, language, whatsapp_opt_in, phone_verified, date_of_birth, gender, tags, created_at")
     .eq("id", patientId)
+    .eq("clinic_id", clinicId)
     .maybeSingle();
 
   if (pErr || !p) return null;

@@ -32,7 +32,7 @@ const DEFAULT_FEATURES: PlanFeaturesInput = {
 };
 
 const FEATURE_BOOL_KEYS: { key: keyof PlanFeaturesInput; label: string; hint?: string }[] = [
-  { key: "public_listing",      label: "Public clinic profile",         hint: "Show on /d/{slug}" },
+  { key: "public_listing",      label: "Public clinic profile",         hint: "Show on /{slug}" },
   { key: "patient_enquiries",   label: "Patient enquiry form",          hint: "Public 'request callback' on the profile" },
   { key: "calendar",            label: "Online appointment scheduling" },
   { key: "emr",                 label: "Digital prescriptions / EMR" },

@@ -9,7 +9,7 @@ import {
   deactivateClinicUserAction,
   inviteClinicUserAction,
   updateClinicUserRoleAction,
-} from "@/app/(clinic-app)/admin/settings/team/actions";
+} from "@/app/(clinic-app)/[clinicSlug]/admin/settings/team/actions";
 import { SettingsTabs } from "@/components/molecules/SettingsTabs";
 import type { ClinicUserRole, TeamMember } from "@/lib/data/admin-team";
 

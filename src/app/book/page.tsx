@@ -1,41 +1,16 @@
 import Link from "next/link";
-import { BookingLayout } from "@/components/layouts/BookingLayout";
-import { BookingComposer } from "@/components/compositions/BookingComposer";
-import { getCurrentClinic } from "@/lib/booking/current-clinic";
-import { getPublicDepartments, getPublicDoctors } from "@/lib/data/public-booking";
 import { serviceClient } from "@/lib/supabase/server";
 
 export const metadata = {
-  title: "Book a visit",
+  title: "Pick a clinic to book with",
 };
 
-export default async function BookPage() {
-  const clinic = await getCurrentClinic();
-
-  // Apex with no tenant: render a "Pick a clinic" helper instead of bare 404.
-  if (!clinic) {
-    return <PickAClinic />;
-  }
-
-  const [doctors, departments] = await Promise.all([
-    getPublicDoctors(clinic.id),
-    getPublicDepartments(clinic.id),
-  ]);
-
-  return (
-    <BookingLayout>
-      <BookingComposer
-        clinicName={clinic.name}
-        doctors={doctors}
-        departments={departments}
-      />
-    </BookingLayout>
-  );
-}
-
-async function PickAClinic() {
-  // Show 6 active clinics (verified preferred) so the user can jump straight
-  // into a clinic's profile and book from there.
+/**
+ * Apex /book — landing for patients who hit "Book" without picking a clinic
+ * yet. Real booking lives at /[clinicSlug]/book. This page just lists a few
+ * featured clinics so the user can click through.
+ */
+export default async function PickAClinicPage() {
   const supabase = serviceClient();
   const { data: verified } = await supabase
     .from("clinics")
@@ -50,13 +25,13 @@ async function PickAClinic() {
     application: Array<{ city: string | null; state: string | null }>;
   }>;
   if (rows.length < 3) {
-    const { data: any } = await supabase
+    const { data } = await supabase
       .from("clinics")
       .select("id, slug, name, verification_status, application:clinic_applications!clinic_applications_clinic_id_fkey ( city, state )")
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(6);
-    rows = (any ?? []) as typeof rows;
+    rows = (data ?? []) as typeof rows;
   }
 
   return (
@@ -85,7 +60,7 @@ async function PickAClinic() {
               return (
                 <Link
                   key={c.id}
-                  href={`/d/${c.slug}`}
+                  href={`/${c.slug}/book`}
                   className="flex items-center gap-3 rounded-lg border border-border bg-white p-4 no-underline transition-shadow hover:shadow-md"
                 >
                   <span className="grid h-11 w-11 flex-none place-items-center rounded-md bg-[#E6F1FA] text-[14px] font-bold text-[#0E5087]">

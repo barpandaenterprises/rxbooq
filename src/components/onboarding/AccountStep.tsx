@@ -24,7 +24,7 @@ export function AccountStep({ draft }: { draft: Draft }) {
     startTransition(async () => {
       const res = await finalizeOnboardingAction({ email, password, acceptTos: tos });
       if (!res.ok) { setError(res.error); return; }
-      router.push("/admin/today?welcome=1");
+      router.push(`/${res.clinicSlug}/admin/today?welcome=1`);
     });
   };
 

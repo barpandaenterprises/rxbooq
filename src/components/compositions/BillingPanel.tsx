@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { upgradePlanAction } from "@/app/(clinic-app)/admin/settings/billing/actions";
+import { upgradePlanAction } from "@/app/(clinic-app)/[clinicSlug]/admin/settings/billing/actions";
 import { formatInr } from "@/lib/billing/pricing";
 
 type Plan = {

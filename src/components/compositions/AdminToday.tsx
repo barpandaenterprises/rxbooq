@@ -2,6 +2,7 @@
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Popover from "@radix-ui/react-popover";
+import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Sparkline } from "@/components/atoms/Sparkline";
 import type {
@@ -173,6 +174,8 @@ function WaStatusIcon({ status }: { status: string }) {
 }
 
 function WaFeed({ activity }: { activity: WaActivity[] }) {
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   return (
     <div className="flex h-full flex-col rounded-[12px] border border-border bg-white">
       <div className="flex items-center gap-2.5 border-b border-border px-5 py-4">
@@ -189,7 +192,7 @@ function WaFeed({ activity }: { activity: WaActivity[] }) {
             Live · {activity.length} event{activity.length === 1 ? "" : "s"} in the last hour
           </div>
         </div>
-        <a href="/admin/messages" className="text-[12px] text-link-hover no-underline">View all</a>
+        <a href={`/${slug}/admin/messages`} className="text-[12px] text-link-hover no-underline">View all</a>
       </div>
       <div className="flex-1 overflow-hidden">
         {activity.length === 0 ? (

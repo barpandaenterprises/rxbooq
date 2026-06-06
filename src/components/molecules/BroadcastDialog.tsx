@@ -9,7 +9,7 @@ import {
   previewBroadcastAudienceAction,
   type BroadcastAudienceInput,
   type WaTemplateRow,
-} from "@/app/(clinic-app)/admin/messages/actions";
+} from "@/app/(clinic-app)/[clinicSlug]/admin/messages/actions";
 
 type Props = {
   trigger?:      React.ReactNode;

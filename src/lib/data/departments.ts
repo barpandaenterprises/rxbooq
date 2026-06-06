@@ -7,6 +7,7 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
+import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
 
 export type Department = {
   id:           string;
@@ -44,10 +45,14 @@ const COLUMNS = "id, clinic_id, name, slug, display_order, is_active, created_at
 
 /** Active + inactive departments for the caller's clinic, ordered for UI. */
 export async function listDepartments(): Promise<Department[]> {
+  const clinicId = await getCurrentStaffClinicId();
+  if (!clinicId) return [];
+
   const supabase = await serverClient();
   const { data, error } = await supabase
     .from("departments")
     .select(COLUMNS)
+    .eq("clinic_id", clinicId)
     .order("display_order", { ascending: true })
     .order("name",          { ascending: true });
 

@@ -1,29 +1,12 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { loadClinicForPublicPage } from "@/lib/data/public-clinic-page";
-import { ClinicHomePage } from "@/components/compositions/ClinicHomePage";
+import { permanentRedirect } from "next/navigation";
 
 type Params = Promise<{ clinicSlug: string }>;
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+/**
+ * Legacy URL. The canonical public profile lives at /[clinicSlug].
+ * 308 redirect keeps any cached / bookmarked /d/{slug} links working.
+ */
+export default async function LegacyClinicProfileRedirect({ params }: { params: Params }) {
   const { clinicSlug } = await params;
-  const page = await loadClinicForPublicPage({ slug: clinicSlug });
-  if (!page) return { title: "Clinic not found" };
-  const { clinic } = page;
-  const desc = clinic.pitch ?? `${clinic.name} — book an appointment online.`;
-  return {
-    title:       `${clinic.name} — Rxbooq`,
-    description: desc.slice(0, 160),
-    openGraph: {
-      title:       clinic.name,
-      description: desc.slice(0, 160),
-    },
-  };
-}
-
-export default async function ClinicProfilePage({ params }: { params: Params }) {
-  const { clinicSlug } = await params;
-  const page = await loadClinicForPublicPage({ slug: clinicSlug });
-  if (!page) notFound();
-  return <ClinicHomePage page={page} />;
+  permanentRedirect(`/${clinicSlug}`);
 }

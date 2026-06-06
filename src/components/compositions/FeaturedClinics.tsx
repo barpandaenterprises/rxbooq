@@ -75,7 +75,7 @@ export async function FeaturedClinics() {
             {cards.map((c) => (
               <Link
                 key={c.id}
-                href={`/d/${c.slug}`}
+                href={`/${c.slug}`}
                 className="group flex flex-col rounded-lg border border-border bg-white p-5 no-underline transition-shadow hover:shadow-md"
               >
                 <div className="mb-3 flex items-start justify-between gap-3">

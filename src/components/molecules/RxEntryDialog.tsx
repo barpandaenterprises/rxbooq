@@ -15,7 +15,7 @@ import {
 } from "@/lib/patient-history-data";
 import { recognisePrescription } from "@/lib/rx-ocr";
 import { RX_TEMPLATES, getTemplate } from "@/lib/rx-templates";
-import { createPrescriptionAction } from "@/app/(clinic-app)/admin/prescriptions/actions";
+import { createPrescriptionAction } from "@/app/(clinic-app)/[clinicSlug]/admin/prescriptions/actions";
 
 // ---------- Form schema ----------------------------------------------------
 
