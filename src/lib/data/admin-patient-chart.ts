@@ -12,7 +12,8 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
-import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
+import { getActiveMembership } from "@/lib/auth/current-user";
+import { doctorCanAccessPatient } from "@/lib/data/doctor-scope";
 import { useMockData } from "@/lib/feature-flags";
 import {
   findChart,
@@ -124,6 +125,7 @@ type DbPatient = {
   date_of_birth:    string | null;
   gender:           string | null;
   tags:             string[] | null;
+  assigned_doctor_id: string | null;
   created_at:       string;
 };
 
@@ -131,14 +133,24 @@ async function getLivePatientChart(patientId: string): Promise<Chart | null> {
   // Scope the initial lookup to the caller's clinic. The downstream joined
   // queries are then implicitly clinic-scoped because they're keyed by
   // patient_id, and the patient row itself is now confirmed in this clinic.
-  const clinicId = await getCurrentStaffClinicId();
-  if (!clinicId) return null;
+  const membership = await getActiveMembership();
+  if (!membership) return null;
+  const clinicId = membership.clinicId;
 
   const supabase = await serverClient();
 
+  // A doctor may only open a chart for a patient they can access (assigned, or
+  // they have an appointment with). Once granted, the full chart is shown —
+  // including other doctors' visits for the same patient.
+  if (membership.role === "doctor") {
+    if (!membership.doctorId) return null;
+    const allowed = await doctorCanAccessPatient(supabase, clinicId, membership.doctorId, patientId);
+    if (!allowed) return null;
+  }
+
   const { data: p, error: pErr } = await supabase
     .from("patients")
-    .select("id, full_name, phone_e164, language, whatsapp_opt_in, phone_verified, date_of_birth, gender, tags, created_at")
+    .select("id, full_name, phone_e164, language, whatsapp_opt_in, phone_verified, date_of_birth, gender, tags, assigned_doctor_id, created_at")
     .eq("id", patientId)
     .eq("clinic_id", clinicId)
     .maybeSingle();
@@ -204,6 +216,7 @@ async function getLivePatientChart(patientId: string): Promise<Chart | null> {
     whatsappOptIn: patient.whatsapp_opt_in,
     verified:      patient.phone_verified,
     registeredOn:  patient.created_at.slice(0, 10),
+    assignedDoctorId: patient.assigned_doctor_id ?? null,
   };
 
   // ---- Medical history ------------------------------------------------------

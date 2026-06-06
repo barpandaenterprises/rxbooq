@@ -14,7 +14,7 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
-import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
+import { getActiveMembership } from "@/lib/auth/current-user";
 import { useMockData } from "@/lib/feature-flags";
 
 export type AnalyticsPeriod = "7d" | "30d" | "90d";
@@ -225,9 +225,18 @@ async function getLiveAnalytics(
   doctorId:  string | null,
   serviceId: string | null,
 ): Promise<AdminAnalyticsData> {
-  const clinicId = await getCurrentStaffClinicId();
-  if (!clinicId) {
+  const membership = await getActiveMembership();
+  if (!membership) {
     return emptyAnalytics();
+  }
+  const clinicId = membership.clinicId;
+
+  // A doctor login gets a self-only view: force the doctor filter to their own
+  // profile and ignore any client-supplied filter. Unlinked → empty.
+  let effectiveDoctorId = doctorId;
+  if (membership.role === "doctor") {
+    if (!membership.doctorId) return emptyAnalytics();
+    effectiveDoctorId = membership.doctorId;
   }
 
   const supabase = await serverClient();
@@ -246,20 +255,32 @@ async function getLiveAnalytics(
     .select("starts_at, status, source, doctor_id")
     .eq("clinic_id", clinicId)
     .gte("starts_at", new Date(prevStartMs).toISOString());
-  if (doctorId) apptQ = apptQ.eq("doctor_id", doctorId);
+  if (effectiveDoctorId) apptQ = apptQ.eq("doctor_id", effectiveDoctorId);
+
+  // New-patients KPI: scope to the doctor's assigned patients in a doctor view.
+  let patientsQ = supabase
+    .from("patients")
+    .select("created_at, language")
+    .eq("clinic_id", clinicId);
+  if (membership.role === "doctor" && effectiveDoctorId) {
+    patientsQ = patientsQ.eq("assigned_doctor_id", effectiveDoctorId);
+  }
+
+  // Doctor selector options: a doctor only ever sees themselves.
+  let doctorsQ = supabase
+    .from("doctors")
+    .select("id, display_name")
+    .eq("clinic_id", clinicId)
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
+  if (membership.role === "doctor" && effectiveDoctorId) {
+    doctorsQ = doctorsQ.eq("id", effectiveDoctorId);
+  }
 
   const [{ data: appts }, { data: patients }, { data: doctors }] = await Promise.all([
     apptQ,
-    supabase
-      .from("patients")
-      .select("created_at, language")
-      .eq("clinic_id", clinicId),
-    supabase
-      .from("doctors")
-      .select("id, display_name")
-      .eq("clinic_id", clinicId)
-      .eq("is_active", true)
-      .order("display_order", { ascending: true }),
+    patientsQ,
+    doctorsQ,
   ]);
 
   type ApptRow = {
@@ -367,13 +388,15 @@ async function getLiveAnalytics(
   ];
 
   // ---- Repeat no-shows ---------------------------------------------------
-  const { data: noShowAppts } = await supabase
+  let noShowQ = supabase
     .from("appointments")
     .select("starts_at, patient:patients(id, full_name)")
     .eq("clinic_id", clinicId)
     .eq("status", "no_show")
     .gte("starts_at", new Date(startMs).toISOString())
     .order("starts_at", { ascending: false });
+  if (effectiveDoctorId) noShowQ = noShowQ.eq("doctor_id", effectiveDoctorId);
+  const { data: noShowAppts } = await noShowQ;
 
   type NS = { starts_at: string; patient: { id: string; full_name: string } | { id: string; full_name: string }[] | null };
   const nsAgg = new Map<string, { name: string; count: number; lastIso: string }>();
@@ -408,7 +431,7 @@ async function getLiveAnalytics(
     period,
     windowStart:      windowStartIso,
     windowEnd:        windowEndIso,
-    filters:          { doctorId, serviceId },
+    filters:          { doctorId: effectiveDoctorId, serviceId },
     doctorOptions:    (doctors ?? []).map((d) => ({ id: d.id, label: d.display_name })),
     serviceOptions:   [],   // service filter retired with the schema drop
     kpis,

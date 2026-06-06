@@ -1,16 +1,19 @@
 import { ClinicAppLayout } from "@/components/layouts/ClinicAppLayout";
 import { AdminTeam } from "@/components/compositions/AdminTeam";
-import { getAdminTeamData } from "@/lib/data/admin-team";
+import { getAdminTeamData, getClinicDoctorOptions } from "@/lib/data/admin-team";
 
 export const metadata = {
   title: "Team",
 };
 
 export default async function AdminTeamPage() {
-  const members = await getAdminTeamData();
+  const [members, doctorOptions] = await Promise.all([
+    getAdminTeamData(),
+    getClinicDoctorOptions(),
+  ]);
   return (
     <ClinicAppLayout active="Settings">
-      <AdminTeam initialMembers={members} />
+      <AdminTeam initialMembers={members} doctorOptions={doctorOptions} />
     </ClinicAppLayout>
   );
 }

@@ -11,6 +11,10 @@ export type SignedInClinicUser = {
    *  For URL-driven scoping, prefer getCurrentStaffClinicId() which reads the
    *  active clinic from the request URL (set by middleware). */
   clinicId:    string | null;
+  /** Linked doctor profile for a doctor-role login (first-membership value —
+   *  display only). For scoping, read getActiveMembership() which is scoped to
+   *  the active clinic in the URL. Null for non-doctors / unlinked logins. */
+  doctorId:    string | null;
 };
 
 /**
@@ -41,13 +45,16 @@ export const getSignedInClinicUser = cache(
         displayName: user.email ?? "Signed in",
         role:        "superadmin",
         clinicId:    null,
+        doctorId:    null,
       };
     }
 
     const { data: row } = await supabase
       .from("clinic_users")
-      .select("clinic_id, role, display_name, email")
+      .select("clinic_id, role, display_name, email, doctor_id")
       .eq("auth_user_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle();
 
     if (row) {
@@ -57,6 +64,7 @@ export const getSignedInClinicUser = cache(
         displayName: row.display_name ?? user.email ?? "Signed in",
         role:        row.role as SignedInClinicUser["role"],
         clinicId:    row.clinic_id,
+        doctorId:    row.doctor_id ?? null,
       };
     }
 
@@ -66,9 +74,81 @@ export const getSignedInClinicUser = cache(
       displayName: user.email ?? "Signed in",
       role:        null,
       clinicId:    null,
+      doctorId:    null,
     };
   },
 );
+
+export type ActiveMembership = {
+  clinicId:   string;
+  role:       "clinic_admin" | "doctor" | "receptionist";
+  /** Linked doctor profile for a doctor-role login in THIS clinic; null when
+   *  the role isn't doctor or the login hasn't been linked to a profile yet. */
+  doctorId:   string | null;
+  authUserId: string;
+};
+
+/**
+ * Resolves the signed-in user's membership in the clinic they're *acting in*
+ * right now (URL-driven, same resolution as getCurrentStaffClinicId). This is
+ * the source of truth for role + linked doctor_id when scoping data or gating
+ * actions — never use the first-membership values from getSignedInClinicUser()
+ * for that, since a doctor can belong to multiple clinics with a different
+ * profile link in each.
+ *
+ * Returns null when not signed in, no clinic context, or not a member of the
+ * active clinic. Superadmin returns null here (they aren't a clinic member);
+ * callers that must support superadmin handle that separately.
+ */
+export const getActiveMembership = cache(async (): Promise<ActiveMembership | null> => {
+  const sess = await serverClient();
+  const { data: { user } } = await sess.auth.getUser();
+  if (!user) return null;
+
+  const admin = serviceClient();
+  const h    = await headers();
+  const slug = h.get("x-active-clinic-slug");
+
+  if (slug) {
+    const { data: clinic } = await admin
+      .from("clinics")
+      .select("id")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!clinic) return null;
+
+    const { data: membership } = await admin
+      .from("clinic_users")
+      .select("role, doctor_id")
+      .eq("clinic_id", clinic.id)
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+    if (!membership) return null;
+    return {
+      clinicId:   clinic.id,
+      role:       membership.role as ActiveMembership["role"],
+      doctorId:   membership.doctor_id ?? null,
+      authUserId: user.id,
+    };
+  }
+
+  // Legacy fallback for routes not yet under /[clinicSlug]/admin/* — use the
+  // user's first membership. Mirrors getCurrentStaffClinicId().
+  const { data: first } = await admin
+    .from("clinic_users")
+    .select("clinic_id, role, doctor_id")
+    .eq("auth_user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!first) return null;
+  return {
+    clinicId:   first.clinic_id,
+    role:       first.role as ActiveMembership["role"],
+    doctorId:   first.doctor_id ?? null,
+    authUserId: user.id,
+  };
+});
 
 /**
  * Returns the clinic_id the signed-in user is *acting in* right now, scoped by

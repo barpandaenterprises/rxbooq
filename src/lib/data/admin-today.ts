@@ -12,7 +12,7 @@
 
 import { serverClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/feature-flags";
-import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
+import { getActiveMembership } from "@/lib/auth/current-user";
 
 // =============================================================================
 // Canonical types — AdminToday renders against these
@@ -169,8 +169,15 @@ function groupByHour(items: ApptItem[]): ApptHourGroup[] {
 
 async function getLiveAdminTodayData(): Promise<AdminTodayData> {
   // Explicit clinic scope — defense-in-depth against RLS superadmin bypass.
-  const clinicId = await getCurrentStaffClinicId();
-  if (!clinicId) {
+  const membership = await getActiveMembership();
+  if (!membership) {
+    return { appointments: [], doctors: [], waActivity: [], kpis: emptyKpis() };
+  }
+  const clinicId = membership.clinicId;
+  // A doctor login sees only their own appointments. A doctor not yet linked to
+  // a profile sees nothing (fail-closed) rather than the whole clinic.
+  const scopeDoctorId = membership.role === "doctor" ? membership.doctorId : null;
+  if (membership.role === "doctor" && !scopeDoctorId) {
     return { appointments: [], doctors: [], waActivity: [], kpis: emptyKpis() };
   }
 
@@ -178,7 +185,7 @@ async function getLiveAdminTodayData(): Promise<AdminTodayData> {
   const start    = startOfTodayIST();
   const end      = new Date(start.getTime() + 24 * 60 * 60 * 1000);
 
-  const { data: rows, error } = await supabase
+  let apptQuery = supabase
     .from("appointments")
     .select(`
       id, starts_at, status,
@@ -189,6 +196,9 @@ async function getLiveAdminTodayData(): Promise<AdminTodayData> {
     .gte("starts_at", start.toISOString())
     .lt("starts_at", end.toISOString())
     .order("starts_at", { ascending: true });
+  if (scopeDoctorId) apptQuery = apptQuery.eq("doctor_id", scopeDoctorId);
+
+  const { data: rows, error } = await apptQuery;
 
   if (error) {
     console.error("[admin-today] appointments query failed:", error.message);
@@ -215,17 +225,20 @@ async function getLiveAdminTodayData(): Promise<AdminTodayData> {
   });
 
   // Distinct doctor list for the filter — pulled from the active doctors,
-  // not just today's roster, so the filter still shows all options.
-  const { data: doctorRows } = await supabase
+  // not just today's roster, so the filter still shows all options. A doctor
+  // login only ever sees themselves, so the filter is just their own name.
+  let doctorListQuery = supabase
     .from("doctors")
     .select("display_name")
     .eq("clinic_id", clinicId)
     .eq("is_active", true)
     .order("display_order", { ascending: true });
+  if (scopeDoctorId) doctorListQuery = doctorListQuery.eq("id", scopeDoctorId);
+  const { data: doctorRows } = await doctorListQuery;
 
   const doctors = (doctorRows ?? []).map((d) => d.display_name);
 
-  const kpis = await getLiveKpis(supabase, clinicId);
+  const kpis = await getLiveKpis(supabase, clinicId, scopeDoctorId);
 
   return {
     appointments: groupByHour(items),
@@ -271,19 +284,22 @@ function countByDay(rows: { starts_at?: string; created_at?: string }[], dayKey:
 async function getLiveKpis(
   supabase: Awaited<ReturnType<typeof serverClient>>,
   clinicId: string,
+  scopeDoctorId: string | null,
 ): Promise<AdminTodayKpis> {
   const now              = Date.now();
   const sevenDaysMs      = 7  * 86_400_000;
   const fourteenDaysAgo  = new Date(now - 2 * sevenDaysMs).toISOString();
 
   // ---- No-shows in the last 7d + previous 7d (single query covers both) ----
-  const { data: noShowRows } = await supabase
+  let noShowQuery = supabase
     .from("appointments")
     .select("starts_at, status")
     .eq("clinic_id", clinicId)
     .eq("status", "no_show")
     .gte("starts_at", fourteenDaysAgo)
     .lt("starts_at",  new Date(now).toISOString());
+  if (scopeDoctorId) noShowQuery = noShowQuery.eq("doctor_id", scopeDoctorId);
+  const { data: noShowRows } = await noShowQuery;
 
   const cutoff7Ms       = now - sevenDaysMs;
   const noShowCurrent   = (noShowRows ?? []).filter((r) => new Date(r.starts_at).getTime() >= cutoff7Ms).length;
@@ -295,11 +311,14 @@ async function getLiveKpis(
   );
 
   // ---- New patients ------------------------------------------------------
-  const { data: patientRows } = await supabase
+  // For a doctor, "new patients" means new patients assigned to them.
+  let patientQuery = supabase
     .from("patients")
     .select("created_at")
     .eq("clinic_id", clinicId)
     .gte("created_at", fourteenDaysAgo);
+  if (scopeDoctorId) patientQuery = patientQuery.eq("assigned_doctor_id", scopeDoctorId);
+  const { data: patientRows } = await patientQuery;
 
   const newPatientsCurrent = (patientRows ?? []).filter((r) => new Date(r.created_at).getTime() >= cutoff7Ms).length;
   const newPatientsPrev    = (patientRows ?? []).filter((r) => new Date(r.created_at).getTime() <  cutoff7Ms).length;

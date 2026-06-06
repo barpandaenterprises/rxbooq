@@ -49,9 +49,12 @@ const STATUS_FILTERS: Array<{ value: DoctorStatus | "all"; label: string }> = [
 export function AdminDoctors({
   initialDoctors,
   departments = [],
+  canManage = true,
 }: {
   initialDoctors: Doctor[];
   departments?: Department[];
+  /** Doctors-role logins view read-only; admins manage. */
+  canManage?: boolean;
 }) {
   const router = useRouter();
   // Local order so drag-and-drop feels instant. We sync to the server in the
@@ -110,6 +113,7 @@ export function AdminDoctors({
   // are active. Otherwise the visual order doesn't match the canonical sequence
   // and reordering would do something surprising.
   const dragDisabled =
+    !canManage ||
     sortBy !== "manual" ||
     search.trim().length > 0 ||
     specialty !== "all" ||
@@ -193,17 +197,19 @@ export function AdminDoctors({
           >
             <i className="fas fa-file-export" /> Export CSV
           </button>
-          <AddDoctorDialog
-            departments={departments}
-            trigger={
-              <button
-                type="button"
-                className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-4 py-2 text-[14px] font-medium text-cta-fg hover:bg-[#d92843]"
-              >
-                <i className="fas fa-user-md" /> Add doctor
-              </button>
-            }
-          />
+          {canManage && (
+            <AddDoctorDialog
+              departments={departments}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-cta px-4 py-2 text-[14px] font-medium text-cta-fg hover:bg-[#d92843]"
+                >
+                  <i className="fas fa-user-md" /> Add doctor
+                </button>
+              }
+            />
+          )}
         </div>
       </div>
 
@@ -399,7 +405,7 @@ export function AdminDoctors({
                     </td>
                   </tr>
                 ) : (
-                  sorted.map((d) => <DoctorRow key={d.id} d={d} draggable={!dragDisabled} departments={departments} />)
+                  sorted.map((d) => <DoctorRow key={d.id} d={d} draggable={!dragDisabled} departments={departments} canManage={canManage} />)
                 )}
               </tbody>
             </table>
@@ -421,7 +427,7 @@ export function AdminDoctors({
   );
 }
 
-function DoctorRow({ d, draggable, departments }: { d: Doctor; draggable: boolean; departments: Department[] }) {
+function DoctorRow({ d, draggable, departments, canManage }: { d: Doctor; draggable: boolean; departments: Department[]; canManage: boolean }) {
   const params = useParams<{ clinicSlug: string }>();
   const slug   = params?.clinicSlug ?? "";
   const status = STATUS_META[d.status];
@@ -510,7 +516,7 @@ function DoctorRow({ d, draggable, departments }: { d: Doctor; draggable: boolea
         )}
       </td>
       <td className="px-3 py-3 pr-4 text-right">
-        <DoctorRowMenu d={d} departments={departments} />
+        {canManage && <DoctorRowMenu d={d} departments={departments} />}
       </td>
     </tr>
   );

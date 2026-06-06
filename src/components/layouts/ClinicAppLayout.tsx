@@ -2,6 +2,7 @@ import Link from "next/link";
 import { NewAppointmentDialog } from "@/components/compositions/NewAppointmentDialog";
 import { ClinicSwitcher, type ClinicMembership } from "@/components/molecules/ClinicSwitcher";
 import {
+  getActiveMembership,
   getMyClinicMemberships,
   getSignedInClinicUser,
   type SignedInClinicUser,
@@ -42,6 +43,8 @@ export type AdminNavKey =
   | "Content"
   | "Settings";
 
+type StaffRole = "clinic_admin" | "doctor" | "receptionist";
+
 type NavSpec = {
   ic: string;
   label: AdminNavKey;
@@ -49,6 +52,8 @@ type NavSpec = {
   path: string;
   badge?: string;
   badgeCoral?: boolean;
+  /** If set, only these roles see the item (superadmin always does). */
+  roles?: StaffRole[];
 };
 
 const NAV_ITEMS: NavSpec[] = [
@@ -59,8 +64,16 @@ const NAV_ITEMS: NavSpec[] = [
   { ic: "fa-comments",     label: "Messages",  path: "/messages",         badge: "3", badgeCoral: true },
   { ic: "fa-chart-line",   label: "Analytics", path: "/analytics" },
   { ic: "fa-file-alt",     label: "Content",   path: "#" },
-  { ic: "fa-cog",          label: "Settings",  path: "/settings/team" },
+  // Clinic configuration is admin-only; doctors and receptionists don't see it.
+  { ic: "fa-cog",          label: "Settings",  path: "/settings/team",    roles: ["clinic_admin"] },
 ];
+
+/** Whether a nav item is visible for the given active-clinic role. */
+function navVisibleFor(item: NavSpec, role: StaffRole | "superadmin" | null): boolean {
+  if (!item.roles) return true;
+  if (role === "superadmin") return true;
+  return role !== null && item.roles.includes(role as StaffRole);
+}
 
 type MobileTabSpec = { ic: string; label: string; path?: string; key: AdminNavKey | "More"; badge?: number };
 
@@ -104,12 +117,14 @@ function ClinicSidebar({
   clinic,
   slug,
   memberships,
+  navRole,
 }: {
   active:      AdminNavKey;
   user:        SignedInClinicUser | null;
   clinic:      ClinicHeader | null;
   slug:        string;
   memberships: ClinicMembership[];
+  navRole:     StaffRole | "superadmin" | null;
 }) {
   const displayName = user?.displayName ?? "Signed in";
   const initials    = user?.displayName ? initialsOf(user.displayName) : "?";
@@ -127,7 +142,7 @@ function ClinicSidebar({
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5">
-        {NAV_ITEMS.map((it) => {
+        {NAV_ITEMS.filter((it) => navVisibleFor(it, navRole)).map((it) => {
           const isActive = it.label === active;
           return (
             <Link
@@ -189,11 +204,13 @@ function ClinicTopBar({
   dayLabel,
   dateLabel,
   lookups,
+  restrictToDoctorId,
 }: {
   subtitle?: string;
   dayLabel?: string;
   dateLabel?: string;
   lookups: BookingLookups;
+  restrictToDoctorId?: string | null;
 }) {
   return (
     <header className="flex items-center gap-6 border-b border-border bg-white px-5 py-3.5 md:px-8">
@@ -230,6 +247,7 @@ function ClinicTopBar({
         </button>
         <NewAppointmentDialog
           lookups={lookups}
+          restrictToDoctorId={restrictToDoctorId}
           trigger={
             <button
               type="button"
@@ -241,6 +259,7 @@ function ClinicTopBar({
         />
         <NewAppointmentDialog
           lookups={lookups}
+          restrictToDoctorId={restrictToDoctorId}
           trigger={
             <button
               type="button"
@@ -295,12 +314,21 @@ type Props = {
 };
 
 export async function ClinicAppLayout({ active, children, topBarSubtitle, dayLabel, dateLabel }: Props) {
-  const [user, lookups, memberships, urlSlug] = await Promise.all([
+  const [user, lookups, memberships, urlSlug, activeMembership] = await Promise.all([
     getSignedInClinicUser(),
     getBookingLookups(),
     getMyClinicMemberships(),
     getActiveClinicSlug(),
+    getActiveMembership(),
   ]);
+  // Active-clinic role drives nav gating (a user can have different roles per
+  // clinic). Fall back to the platform/display role for superadmins.
+  const navRole: StaffRole | "superadmin" | null =
+    activeMembership?.role ?? (user?.role === "superadmin" ? "superadmin" : null);
+  // Doctors book only for themselves — lock the New Appointment doctor field.
+  // `undefined` for admins/receptionists (no restriction).
+  const restrictToDoctorId =
+    activeMembership?.role === "doctor" ? activeMembership.doctorId : undefined;
   // The URL slug (set by middleware on /[slug]/admin/*) drives which clinic
   // the sidebar shows. Pages don't have to pass it — every admin page lives
   // under the same /[slug]/ root, so the header is always set when this
@@ -316,9 +344,10 @@ export async function ClinicAppLayout({ active, children, topBarSubtitle, dayLab
         clinic={clinic}
         slug={slug}
         memberships={memberships}
+        navRole={navRole}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <ClinicTopBar subtitle={topBarSubtitle} dayLabel={dayLabel} dateLabel={dateLabel} lookups={lookups} />
+        <ClinicTopBar subtitle={topBarSubtitle} dayLabel={dayLabel} dateLabel={dateLabel} lookups={lookups} restrictToDoctorId={restrictToDoctorId} />
         <main className="flex-1 pb-24 md:pb-10">{children}</main>
       </div>
       <ClinicMobileTabBar active={active} slug={slug} />

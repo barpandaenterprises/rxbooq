@@ -147,6 +147,9 @@ export type ChartPatient = {
   whatsappOptIn: boolean;
   verified: boolean;
   registeredOn: string;
+  /** Assigned/primary doctor id (patients.assigned_doctor_id), or null.
+   *  Optional so mock fixtures don't need to specify it. */
+  assignedDoctorId?: string | null;
 };
 
 export type Chart = {

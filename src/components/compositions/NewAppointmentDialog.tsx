@@ -107,9 +107,16 @@ function fmtSlot(short: string): string {
 type Props = {
   trigger: React.ReactNode;
   lookups: BookingLookups;
+  /**
+   * When the viewer is a doctor, bookings can only be for themselves. Pass their
+   * linked doctor profile id to lock the doctor field (or `null` if their login
+   * isn't linked to a profile yet — booking is then disabled). Leave `undefined`
+   * for admins/receptionists, who can book for any doctor.
+   */
+  restrictToDoctorId?: string | null;
 };
 
-export function NewAppointmentDialog({ trigger, lookups }: Props) {
+export function NewAppointmentDialog({ trigger, lookups, restrictToDoctorId }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -133,6 +140,11 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
   const departments = lookups.departments;
   const doctors     = lookups.doctors;
 
+  // A doctor login may only book for themselves: lock the doctor field and the
+  // by-department flow. `null` means their login isn't linked to a profile.
+  const doctorLocked = restrictToDoctorId !== undefined;
+  const lockedUnlinked = doctorLocked && !restrictToDoctorId;
+
   const dates = useMemo(() => buildDates(DATE_RANGE_DAYS), []);
   const firstIso = dates[0]!.iso;
 
@@ -142,12 +154,12 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
     name:              "",
     mode:              "byDoctor",
     departmentId:      null,
-    doctorId:          doctors[0]?.id ?? null,
+    doctorId:          doctorLocked ? (restrictToDoctorId ?? null) : (doctors[0]?.id ?? null),
     dateIso:           firstIso,
     slot:              null,
     sendWhatsApp:      true,
     notes:             "",
-  }), [doctors, firstIso]);
+  }), [doctors, firstIso, doctorLocked, restrictToDoctorId]);
 
   const {
     register,
@@ -249,10 +261,15 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
     return () => { cancelled = true; };
   }, [open, mode, departmentId, dateIso, slot]);
 
-  // Reset slot + doctor when mode changes.
+  // Reset slot + doctor when mode changes. A locked doctor (the signed-in
+  // doctor) always stays selected — never fall back to the first doctor.
   useEffect(() => {
     setValue("slot", null,  { shouldValidate: false });
-    setValue("doctorId", mode === "byDoctor" ? (doctors[0]?.id ?? null) : null, { shouldValidate: false });
+    setValue(
+      "doctorId",
+      doctorLocked ? (restrictToDoctorId ?? null) : (mode === "byDoctor" ? (doctors[0]?.id ?? null) : null),
+      { shouldValidate: false },
+    );
     setValue("departmentId", null, { shouldValidate: false });
     setSlotDoctors([]);
     setWorkingWindows([]);
@@ -453,7 +470,8 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                   )}
                 </Section>
 
-                {/* Mode toggle */}
+                {/* Mode toggle — hidden for a doctor (they book only their own slots) */}
+                {!doctorLocked && (
                 <Section label="Book by">
                   <div className="inline-flex rounded-md border border-border bg-white p-0.5">
                     {(["byDoctor", "byDept"] as const).map((m) => (
@@ -474,6 +492,7 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                     ))}
                   </div>
                 </Section>
+                )}
 
                 {/* Department or Doctor first */}
                 {mode === "byDept" ? (
@@ -500,11 +519,12 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                   <Section label="Doctor" required>
                     <select
                       value={doctorId ?? ""}
+                      disabled={doctorLocked}
                       onChange={(e) => {
                         setValue("doctorId", e.target.value || null, { shouldValidate: false });
                         setValue("slot",     null,                   { shouldValidate: false });
                       }}
-                      className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover"
+                      className="w-full rounded-md border border-border bg-white px-3 py-2.5 text-[14px] text-heading outline-none focus:border-link-hover disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted"
                     >
                       <option value="">— Pick a doctor —</option>
                       {doctors.map((d) => (
@@ -515,6 +535,13 @@ export function NewAppointmentDialog({ trigger, lookups }: Props) {
                     </select>
                     {errors.doctorId?.message && (
                       <p className="mt-1 text-[11px] text-danger">{errors.doctorId.message}</p>
+                    )}
+                    {doctorLocked && (
+                      <p className="mt-1 text-[11px] text-muted">
+                        {lockedUnlinked
+                          ? "Your login isn't linked to a doctor profile yet — ask an admin to link it before booking."
+                          : "You can only create appointments for yourself."}
+                      </p>
                     )}
                   </Section>
                 )}

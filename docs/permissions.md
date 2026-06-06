@@ -18,7 +18,14 @@ Five distinct roles live in the system. The first four are stored on `public.cli
 | **receptionist** | `clinic_users.role = 'receptionist'` | Front-desk staff | Reads everything in their clinic. Writes scheduling + patient registration only. |
 | **patient** | `patient_users.auth_user_id` matches an `auth.users` row | The patient (via WhatsApp OTP) | Read-only access to their own record. |
 
-A single auth user can hold at most one `clinic_users` row at a time (the unique constraint on `auth_user_id`). A staff member who moves between clinics must be deactivated at the old clinic before being invited to the new one.
+A single auth user can hold **one `clinic_users` row per clinic** (the composite unique on `(clinic_id, auth_user_id)`, migration `0019`). The same person can be a member of multiple clinics, with a potentially different role and linked doctor profile in each.
+
+### Doctor logins (migration `0020`)
+
+A `doctor`-role login can be **linked to a `doctors` profile** via `clinic_users.doctor_id` (nullable; one login per profile per clinic). A linked doctor sees only **their own data**; an *unlinked* doctor login is **fail-closed** (sees nothing, can't book) until an admin links it.
+
+- Create/link a login from **Doctors → Edit doctor → Login & access**, or **Settings → Team** (invite with role *Doctor* + pick a profile, or the per-row profile dropdown).
+- A doctor's patients = those **assigned to them** (`patients.assigned_doctor_id`) **OR** those they have an appointment with. Admins/receptionists set the assignment from the patient add/edit dialog or the chart header.
 
 ---
 
@@ -136,14 +143,18 @@ Patient self-access policies (added in `0004_rls_additions.sql`) additionally al
 
 So tenant isolation and "patient sees only their own data" are both enforced at the DB level. **A misconfigured UI cannot leak data across clinics or between patients.**
 
-### 4.2 What RLS does *not* yet enforce — role-within-clinic
+### 4.2 Role-within-clinic — enforced at the app layer
 
-The current RLS treats every clinic_user role equally — a `receptionist` can `select` from `prescriptions` just as well as a `doctor` can. The role differentiation in section 3 above is currently enforced only in:
+RLS itself still treats every clinic_user role equally (tenant isolation only). Role differentiation — including **"a doctor sees only their own data"** — is enforced in the **application layer**:
 
-- **Server actions** that call `requireClinicAdmin()` (see `settings/team/actions.ts`) — the most explicit gate.
-- **UI rendering** — buttons and routes hidden client-side based on the user's role.
+- **Shared gate `requireRole([...])`** (`src/lib/auth/require-role.ts`), built on the URL-scoped `getActiveMembership()` (`src/lib/auth/current-user.ts`). Every sensitive write action calls it before touching the DB. `requireClinicAdmin()` is the `["clinic_admin"]` shorthand. The team + departments actions were migrated to it.
+- **Data-loader scoping.** The `/admin/{today,calendar,patients,messages,analytics}` loaders and the patient chart add a `doctor`-only branch: appointments are filtered to `doctor_id = me`; patients to the assigned-OR-appointment union (`src/lib/data/doctor-scope.ts`); the chart guards access the same way. Admin/receptionist paths are unchanged.
+- **Action constraints.** `createAppointmentAction` forces `doctor_id = self` for a doctor; doctor management, team/settings, archive, broadcasts, and inbox replies are blocked for doctors.
+- **UI gating.** Sidebar hides *Settings* for doctors; the Doctors screen hides management controls; the inbox is read-only.
 
-**This is a hardening gap.** A determined receptionist can hit `createPrescriptionAction` directly from a crafted request and the server will let them through. To fix it properly, every write action should call a `requireRole(...)` helper before any DB write. Tracked as a polish-phase task.
+> **Caveat — RLS is unchanged (decision: app-layer-only for now).** A service-role query (`serviceClient()`) or any future direct query bypasses the doctor filter. Doctor-scoped loaders use `serverClient()` and must re-apply the doctor scope. Hardening this into RLS (`current_doctor_id()` + role-aware policies) remains a future step.
+
+A determined receptionist can still hit `createPrescriptionAction` directly (clinical-write role split is not yet gated). That specific gap remains.
 
 ### 4.3 What's enforced where — the truth table
 
@@ -153,12 +164,14 @@ The current RLS treats every clinic_user role equally — a `receptionist` can `
 | Patient self-access | ✅ | n/a | n/a |
 | Super-admin global access | ✅ (via `is_super_admin()`) | n/a | ✅ |
 | Clinic admin manages team | ❌ | ✅ (`requireClinicAdmin`) | ✅ |
-| Doctor restricted to own appointments | ❌ | ❌ | ✅ |
+| Doctor restricted to own appointments / patients | ❌ | ✅ (loaders + `requireRole`) | ✅ |
+| Doctor cannot edit / add / deactivate doctors | ❌ | ✅ (`requireClinicAdmin`) | ✅ |
+| Doctor books only for themselves | ❌ | ✅ (forced `doctor_id`) | ✅ |
+| Doctor cannot reply in inbox / broadcast | ❌ | ✅ (`requireRole`) | ✅ |
+| Doctor cannot archive patients | ❌ | ✅ (`requireRole`) | n/a |
 | Doctor can write notes, receptionist can't | ❌ | ❌ | ✅ |
-| Doctor cannot edit other doctors | ❌ | ❌ | ✅ |
-| Receptionist cannot deactivate doctors | ❌ | ❌ | ✅ |
 
-The ❌ rows are the hardening gap. The UI hides the wrong buttons today, but the actions themselves don't reject the wrong role.
+The remaining ❌/❌ row (clinical-write split: notes/prescriptions doctor-only) is the open hardening gap. Doctor data-scoping is now enforced at the loader + action layer, not just the UI.
 
 ---
 
@@ -170,7 +183,7 @@ The ❌ rows are the hardening gap. The UI hides the wrong buttons today, but th
    if (!gate.ok) return gate;
    ```
 
-2. **`current_doctor_id()` SQL helper.** When a `clinic_user.role = 'doctor'` is linked to a `doctors` row (currently they're not linked at all — that's a v2 gap), this helper returns the doctor's UUID and lets RLS scope further:
+2. **`current_doctor_id()` SQL helper.** The `clinic_users.doctor_id` link now exists (migration `0020`) and is enforced in the app layer. The remaining step is to push the same scoping into RLS via a `current_doctor_id()` helper, so a crafted service-role/direct query can't bypass it:
    ```sql
    create policy appointments_doctor_self on public.appointments
      for select using (

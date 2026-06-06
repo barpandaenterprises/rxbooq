@@ -2,53 +2,9 @@
 
 import { revalidateActiveClinicPath } from "@/lib/routing/active-slug";
 import { z } from "zod";
-import { serverClient, serviceClient } from "@/lib/supabase/server";
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-type CallerContext = {
-  clinicId: string;
-  role:     "clinic_admin" | "doctor" | "receptionist";
-  authUserId: string;
-};
-
-/**
- * Resolves the caller's clinic + role via RLS and asserts they're a clinic_admin.
- * Returns the context or an error response shape.
- */
-async function requireClinicAdmin(): Promise<
-  | { ok: true; ctx: CallerContext }
-  | { ok: false; error: string }
-> {
-  const supabase = await serverClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
-  const { data: row } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, role")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-
-  if (!row?.clinic_id) {
-    return { ok: false, error: "Your account is not linked to a clinic." };
-  }
-  if (row.role !== "clinic_admin") {
-    return { ok: false, error: "Only clinic admins can manage the team." };
-  }
-  return {
-    ok: true,
-    ctx: {
-      clinicId:   row.clinic_id,
-      role:       row.role,
-      authUserId: user.id,
-    },
-  };
-}
+import { serviceClient } from "@/lib/supabase/server";
+import { requireClinicAdmin } from "@/lib/auth/require-role";
+import { linkAuthUserToClinic } from "@/lib/auth/link-clinic-user";
 
 // =============================================================================
 // Invite
@@ -59,6 +15,8 @@ const inviteSchema = z.object({
   displayName: z.string().trim().min(2, "Display name is required"),
   role:        z.enum(["clinic_admin", "doctor", "receptionist"]),
   phone:       z.string().trim().optional(),
+  /** Optional doctor profile to link when role='doctor'. */
+  doctorId:    z.string().uuid().optional(),
 });
 
 export type InviteClinicUserInput = z.infer<typeof inviteSchema>;
@@ -101,55 +59,36 @@ export async function inviteClinicUserAction(
         return { ok: false, error: inviteErr?.message ?? "Failed to invite user." };
       }
       // Continue with the existing auth user.
-      return await linkAuthUserToClinic({
+      return await linkAndRevalidate({
         authUserId:  existing.id,
         email:       input.email,
         clinicId:    ctx.clinicId,
         role:        input.role,
         displayName: input.displayName,
         phone:       input.phone,
+        doctorId:    input.role === "doctor" ? input.doctorId ?? null : null,
       });
     }
     return { ok: false, error: inviteErr?.message ?? "Failed to invite user." };
   }
 
-  return await linkAuthUserToClinic({
+  return await linkAndRevalidate({
     authUserId:  invited.user.id,
     email:       input.email,
     clinicId:    ctx.clinicId,
     role:        input.role,
     displayName: input.displayName,
     phone:       input.phone,
+    doctorId:    input.role === "doctor" ? input.doctorId ?? null : null,
   });
 }
 
-async function linkAuthUserToClinic(args: {
-  authUserId:  string;
-  email:       string;
-  clinicId:    string;
-  role:        "clinic_admin" | "doctor" | "receptionist";
-  displayName: string;
-  phone?:      string;
-}): Promise<InviteClinicUserResult> {
-  const admin = serviceClient();
-  const { error } = await admin
-    .from("clinic_users")
-    .insert({
-      clinic_id:    args.clinicId,
-      auth_user_id: args.authUserId,
-      role:         args.role,
-      display_name: args.displayName,
-      email:        args.email,
-      phone:        args.phone ?? null,
-    });
-
-  if (error) {
-    // Most likely a unique violation on auth_user_id — the user is already on
-    // a clinic_users row somewhere. We don't roll back the auth.users row
-    // because they may legitimately exist in another tenant.
-    return { ok: false, error: error.message };
-  }
-
+/** linkAuthUserToClinic + revalidate the team list. */
+async function linkAndRevalidate(
+  args: Parameters<typeof linkAuthUserToClinic>[0],
+): Promise<InviteClinicUserResult> {
+  const result = await linkAuthUserToClinic(args);
+  if (!result.ok) return result;
   await revalidateActiveClinicPath("/admin/settings/team");
   return { ok: true };
 }
@@ -174,13 +113,79 @@ export async function updateClinicUserRoleAction(
   if (!gate.ok) return gate;
 
   const admin = serviceClient();
+  // Clear any doctor-profile link when the role moves away from 'doctor'.
+  const patch: { role: string; doctor_id?: null } =
+    parsed.data.role === "doctor"
+      ? { role: parsed.data.role }
+      : { role: parsed.data.role, doctor_id: null };
   const { error } = await admin
     .from("clinic_users")
-    .update({ role: parsed.data.role })
+    .update(patch)
     .eq("id", parsed.data.clinicUserId)
     .eq("clinic_id", gate.ctx.clinicId); // double-scope: only my clinic
 
   if (error) return { ok: false, error: error.message };
+
+  await revalidateActiveClinicPath("/admin/settings/team");
+  return { ok: true };
+}
+
+// =============================================================================
+// Link a doctor-role login to a doctor profile (Team screen dropdown).
+// =============================================================================
+
+const setDoctorSchema = z.object({
+  clinicUserId: z.string().uuid(),
+  doctorId:     z.string().uuid().nullable(),
+});
+
+export async function setClinicUserDoctorAction(
+  rawInput: z.infer<typeof setDoctorSchema>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = setDoctorSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const gate = await requireClinicAdmin();
+  if (!gate.ok) return gate;
+
+  const admin = serviceClient();
+
+  // The target must be a doctor-role member of this clinic.
+  const { data: target } = await admin
+    .from("clinic_users")
+    .select("id, role")
+    .eq("id", parsed.data.clinicUserId)
+    .eq("clinic_id", gate.ctx.clinicId)
+    .maybeSingle();
+  if (!target) return { ok: false, error: "Team member not found in this clinic." };
+  if (target.role !== "doctor") {
+    return { ok: false, error: "Only doctor-role logins can be linked to a doctor profile." };
+  }
+
+  // If linking (not clearing), the profile must belong to this clinic.
+  if (parsed.data.doctorId) {
+    const { data: doc } = await admin
+      .from("doctors")
+      .select("id")
+      .eq("id", parsed.data.doctorId)
+      .eq("clinic_id", gate.ctx.clinicId)
+      .maybeSingle();
+    if (!doc) return { ok: false, error: "Doctor profile not found in this clinic." };
+  }
+
+  const { error } = await admin
+    .from("clinic_users")
+    .update({ doctor_id: parsed.data.doctorId })
+    .eq("id", parsed.data.clinicUserId)
+    .eq("clinic_id", gate.ctx.clinicId);
+
+  if (error) {
+    if ((error as { code?: string }).code === "23505") {
+      return { ok: false, error: "That doctor profile already has a login linked." };
+    }
+    return { ok: false, error: error.message };
+  }
 
   await revalidateActiveClinicPath("/admin/settings/team");
   return { ok: true };

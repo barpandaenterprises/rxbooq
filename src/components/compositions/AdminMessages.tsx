@@ -175,7 +175,14 @@ function ContextCard({ thread }: { thread: Thread }) {
   );
 }
 
-export function AdminMessages({ initialThreads }: { initialThreads: Thread[] }) {
+export function AdminMessages({
+  initialThreads,
+  canReply = true,
+}: {
+  initialThreads: Thread[];
+  /** Doctors get a read-only inbox; replying is front-desk / admin work. */
+  canReply?: boolean;
+}) {
   const threads = initialThreads;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -435,6 +442,11 @@ export function AdminMessages({ initialThreads }: { initialThreads: Thread[] }) 
                 {sendError}
               </div>
             )}
+            {!canReply ? (
+              <div className="rounded-md border border-border bg-surface-muted px-3.5 py-3 text-[12px] text-muted">
+                <i className="fas fa-lock mr-1.5" /> Read-only inbox — replying is handled by the front desk.
+              </div>
+            ) : (
             <div className="flex flex-wrap items-stretch gap-2">
               {/* Template picker (Popover-equivalent built inline so we don't add another import) */}
               <div className="relative">
@@ -514,6 +526,7 @@ export function AdminMessages({ initialThreads }: { initialThreads: Thread[] }) 
                 )}
               </button>
             </div>
+            )}
           </div>
         </div>
       </div>

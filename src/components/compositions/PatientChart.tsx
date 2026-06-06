@@ -2,9 +2,11 @@
 
 import * as Tabs from "@radix-ui/react-tabs";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { getAttachmentSignedUrlAction } from "@/app/(clinic-app)/[clinicSlug]/admin/attachments/actions";
+import { assignPatientDoctorAction } from "@/app/(clinic-app)/[clinicSlug]/admin/patients/actions";
+import type { DoctorOption } from "@/lib/data/admin-team";
 import { MedicalAlertsBanner } from "@/components/molecules/MedicalAlertsBanner";
 import { PrescriptionDialog } from "@/components/molecules/PrescriptionDialog";
 import { RxEntryDialog } from "@/components/molecules/RxEntryDialog";
@@ -22,6 +24,10 @@ import {
 
 type Props = {
   chart: Chart;
+  /** Clinic doctors for the assigned-doctor control (admins/receptionists). */
+  doctors?: DoctorOption[];
+  /** When true, the assigned-doctor control is editable. */
+  canAssign?: boolean;
 };
 
 const TABS: Array<{ value: string; label: string; icon: string }> = [
@@ -48,12 +54,21 @@ const TAG_COLOR: Record<string, { bg: string; fg: string }> = {
   "Braces":      { bg: "#FFF1D6", fg: "#7a5c2b" },
 };
 
-export function PatientChart({ chart }: Props) {
+export function PatientChart({ chart, doctors = [], canAssign = false }: Props) {
   const params = useParams<{ clinicSlug: string }>();
+  const router = useRouter();
   const slug   = params?.clinicSlug ?? "";
   const { patient, medicalHistory, visits, communications, billing } = chart;
   const [openRx, setOpenRx] = useState<Prescription | null>(null);
   const [fileFilter, setFileFilter] = useState<AttachmentKind | "all">("all");
+  const [isAssigning, startAssign] = useTransition();
+
+  const onAssignDoctor = (doctorId: string) => {
+    startAssign(async () => {
+      await assignPatientDoctorAction({ patientId: patient.id, doctorId: doctorId || null });
+      router.refresh();
+    });
+  };
 
   // Rx added in this session via RxEntryDialog. Mock-only — wiped on refresh.
   const [newPrescriptions, setNewPrescriptions] = useState<Prescription[]>([]);
@@ -143,6 +158,23 @@ export function PatientChart({ chart }: Props) {
                 <i className="fas fa-calendar-plus mr-1.5 text-[11px] text-[#9aa9b8]" />
                 Patient since {formatVisitDate(patient.registeredOn)}
               </span>
+              {canAssign && doctors.length > 0 && (
+                <span className="inline-flex items-center gap-1.5">
+                  <i className="fas fa-user-md text-[11px] text-[#9aa9b8]" />
+                  <select
+                    value={patient.assignedDoctorId ?? ""}
+                    disabled={isAssigning}
+                    onChange={(e) => onAssignDoctor(e.target.value)}
+                    title="Assigned doctor"
+                    className="cursor-pointer rounded-md border border-border bg-white px-2 py-1 text-[12px] text-heading outline-none focus:border-link-hover"
+                  >
+                    <option value="">Unassigned</option>
+                    {doctors.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </span>
+              )}
             </div>
 
             {patient.tags.length > 0 && (

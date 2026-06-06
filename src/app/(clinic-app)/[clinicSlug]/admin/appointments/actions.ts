@@ -3,6 +3,7 @@
 import { revalidateActiveClinicPath } from "@/lib/routing/active-slug";
 import { z } from "zod";
 import { serverClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/require-role";
 import { useMockData } from "@/lib/feature-flags";
 import { sendBookingConfirmation } from "@/lib/wa/booking";
 import {
@@ -393,23 +394,19 @@ export async function createAppointmentAction(
   }
   const input = parsed.data;
 
-  const supabase = await serverClient();
-
-  // Resolve clinic from current user.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
-  const { data: cu } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-  if (!cu?.clinic_id) {
-    return { ok: false, error: "Your account is not linked to a clinic." };
+  // All staff can book; a doctor may only book for themselves.
+  const gate = await requireRole(["clinic_admin", "receptionist", "doctor"]);
+  if (!gate.ok) return gate;
+  if (gate.ctx.role === "doctor") {
+    if (!gate.ctx.doctorId) {
+      return { ok: false, error: "Your login isn't linked to a doctor profile yet — ask an admin to link it." };
+    }
+    // Ignore any client-supplied doctorId; a doctor books only their own slots.
+    input.doctorId = gate.ctx.doctorId;
   }
-  const clinicId = cu.clinic_id;
+  const clinicId = gate.ctx.clinicId;
+
+  const supabase = await serverClient();
 
   // Compute ends_at from the slot length the dialog passed (it knows the
   // doctor's slot_minutes from their availability window). Fallback to 30.

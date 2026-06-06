@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { updateDoctorAction } from "@/app/(clinic-app)/[clinicSlug]/admin/doctors/actions";
+import { createDoctorLoginAction, updateDoctorAction } from "@/app/(clinic-app)/[clinicSlug]/admin/doctors/actions";
 import { DoctorPhotoField, fileToDataUrl } from "@/components/molecules/DoctorPhotoField";
 import type { Department } from "@/lib/data/departments";
 import {
@@ -95,6 +95,34 @@ export function EditDoctorDialog({ trigger, doctor, departments = [], open: cont
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
+
+  // Login / access — invite an email and link it to this doctor profile.
+  const [loginEmail, setLoginEmail] = useState(doctor.email ?? "");
+  const [loginMsg, setLoginMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [isCreatingLogin, startCreateLogin] = useTransition();
+
+  const onCreateLogin = () => {
+    if (isCreatingLogin) return;
+    const email = loginEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setLoginMsg({ kind: "err", text: "Enter a valid email address." });
+      return;
+    }
+    setLoginMsg(null);
+    startCreateLogin(async () => {
+      const result = await createDoctorLoginAction({
+        doctorId:    doctor.id,
+        email,
+        displayName: doctor.name,
+      });
+      if (!result.ok) {
+        setLoginMsg({ kind: "err", text: result.error });
+        return;
+      }
+      setLoginMsg({ kind: "ok", text: `Invite sent to ${email}. They can sign in once they set a password.` });
+      router.refresh();
+    });
+  };
 
   const defaultValues: EditDoctorValues = {
     name:               stripPrefix(doctor.name),
@@ -399,6 +427,44 @@ export function EditDoctorDialog({ trigger, doctor, departments = [], open: cont
                       </div>
                     )}
                   />
+                </Field>
+              </Section>
+
+              <Section label="Login & access">
+                <p className="-mt-1 mb-1 text-[12px] text-muted">
+                  Give this doctor a login. They&rsquo;ll only see their own appointments and assigned patients.
+                  We email a one-time link to set a password.
+                </p>
+                <Field label="Email for login">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="email"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="doctor@clinic.in"
+                      className={inputCls(false)}
+                    />
+                    <button
+                      type="button"
+                      onClick={onCreateLogin}
+                      disabled={isCreatingLogin}
+                      className={
+                        "inline-flex flex-none cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-[13px] font-semibold text-heading hover:border-link-hover " +
+                        (isCreatingLogin ? "cursor-not-allowed opacity-60" : "")
+                      }
+                    >
+                      {isCreatingLogin ? (
+                        <><i className="fas fa-spinner fa-spin text-[12px]" /> Sending…</>
+                      ) : (
+                        <><i className="fas fa-user-plus text-[12px]" /> Create login</>
+                      )}
+                    </button>
+                  </div>
+                  {loginMsg && (
+                    <p className={"mt-1.5 text-[12px] " + (loginMsg.kind === "ok" ? "text-[#1f5e3a]" : "text-danger")}>
+                      {loginMsg.text}
+                    </p>
+                  )}
                 </Field>
               </Section>
             </div>

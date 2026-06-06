@@ -2,7 +2,9 @@
 
 import { revalidateActiveClinicPath } from "@/lib/routing/active-slug";
 import { z } from "zod";
-import { serverClient } from "@/lib/supabase/server";
+import { serverClient, serviceClient } from "@/lib/supabase/server";
+import { requireRole, requireClinicAdmin } from "@/lib/auth/require-role";
+import { linkAuthUserToClinic } from "@/lib/auth/link-clinic-user";
 import {
   deletePublicAsset,
   getPublicAssetUrl,
@@ -57,35 +59,15 @@ export type AddDoctorResult =
  * succeed and the new row would vanish on the next refresh.
  */
 export async function addDoctorAction(input: AddDoctorInput): Promise<AddDoctorResult> {
+  const gate = await requireClinicAdmin();
+  if (!gate.ok) return gate;
   const supabase = await serverClient();
-
-  // Resolve the current user's clinic via clinic_users (RLS lets a staff user
-  // read their own row). We need clinic_id for the NOT NULL FK on doctors.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { ok: false, error: "Not signed in." };
-  }
-
-  const { data: cu, error: cuErr } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-
-  if (cuErr || !cu?.clinic_id) {
-    return {
-      ok: false,
-      error: "Your account is not linked to a clinic. Ask an admin to add a clinic_users row for you.",
-    };
-  }
 
   // Insert the doctor with every captured field.
   const { data: doctor, error: dErr } = await supabase
     .from("doctors")
     .insert({
-      clinic_id:         cu.clinic_id,
+      clinic_id:         gate.ctx.clinicId,
       display_name:      input.displayName,
       qualifications:    input.qualifications.join(", ") || null,
       registration_no:   input.registrationNumber || null,
@@ -112,7 +94,7 @@ export async function addDoctorAction(input: AddDoctorInput): Promise<AddDoctorR
   // Optional photo upload — best-effort. We don't fail the whole insert if the
   // upload fails; the doctor row exists and the admin can retry from Edit.
   if (input.photoBase64 && input.photoMime && input.photoFileName) {
-    const photoUrl = await uploadDoctorPhoto(cu.clinic_id, input.photoBase64, input.photoMime, input.photoFileName);
+    const photoUrl = await uploadDoctorPhoto(gate.ctx.clinicId, input.photoBase64, input.photoMime, input.photoFileName);
     if (photoUrl) {
       await supabase.from("doctors").update({ photo_url: photoUrl }).eq("id", doctor.id);
     }
@@ -121,7 +103,7 @@ export async function addDoctorAction(input: AddDoctorInput): Promise<AddDoctorR
   // Insert availability rows (best-effort — log but don't fail the action).
   if (input.schedule.length > 0) {
     const rows = input.schedule.map((s) => ({
-      clinic_id:    cu.clinic_id,
+      clinic_id:    gate.ctx.clinicId,
       doctor_id:    doctor.id,
       weekday:      s.weekday,
       start_time:   s.start_time,
@@ -175,14 +157,18 @@ export type UpdateDoctorInput = {
 export async function updateDoctorAction(
   input: UpdateDoctorInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const gate = await requireClinicAdmin();
+  if (!gate.ok) return gate;
   const supabase = await serverClient();
 
   // Resolve the doctor's current clinic + photo (so we know which bucket the
   // upload lands in and so we can clean up the previous photo on replace).
+  // Scoped to the admin's clinic so a crafted id can't touch another tenant.
   const { data: current, error: curErr } = await supabase
     .from("doctors")
     .select("clinic_id, photo_url")
     .eq("id", input.id)
+    .eq("clinic_id", gate.ctx.clinicId)
     .maybeSingle();
   if (curErr || !current) {
     return { ok: false, error: "Doctor not found." };
@@ -228,7 +214,11 @@ export async function updateDoctorAction(
 
   if (Object.keys(patch).length === 0) return { ok: true };
 
-  const { error } = await supabase.from("doctors").update(patch).eq("id", input.id);
+  const { error } = await supabase
+    .from("doctors")
+    .update(patch)
+    .eq("id", input.id)
+    .eq("clinic_id", gate.ctx.clinicId);
   if (error) return { ok: false, error: error.message };
 
   // Best-effort cleanup of the previous photo so the bucket doesn't accumulate
@@ -272,11 +262,14 @@ async function uploadDoctorPhoto(
 export async function deactivateDoctorAction(
   doctorId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const gate = await requireClinicAdmin();
+  if (!gate.ok) return gate;
   const supabase = await serverClient();
   const { error } = await supabase
     .from("doctors")
     .update({ status: "inactive", is_active: false })
-    .eq("id", doctorId);
+    .eq("id", doctorId)
+    .eq("clinic_id", gate.ctx.clinicId);
   if (error) return { ok: false, error: error.message };
 
   await revalidateActiveClinicPath("/admin/doctors");
@@ -319,26 +312,20 @@ export async function blockDoctorDatesAction(
   }
   const input = parsed.data;
 
-  const supabase = await serverClient();
-
-  // Resolve the caller's clinic so we can stamp clinic_id (NOT NULL FK).
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
-  const { data: cu } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-  if (!cu?.clinic_id) {
-    return { ok: false, error: "Your account is not linked to a clinic." };
+  // Admins block any doctor; a doctor may only block their own dates.
+  const gate = await requireRole(["clinic_admin", "doctor"]);
+  if (!gate.ok) return gate;
+  if (gate.ctx.role === "doctor" && input.doctorId !== gate.ctx.doctorId) {
+    return { ok: false, error: "You can only block dates on your own calendar." };
   }
+
+  const supabase = await serverClient();
 
   // Dedupe in case the caller sent the same date twice.
   const uniqueDates = Array.from(new Set(input.dates));
 
   const rows = uniqueDates.map((date) => ({
-    clinic_id:  cu.clinic_id,
+    clinic_id:  gate.ctx.clinicId,
     doctor_id:  input.doctorId,
     date,
     is_blocked: true,
@@ -397,25 +384,17 @@ export async function updateDoctorScheduleAction(
   }
   const input = parsed.data;
 
+  const gate = await requireClinicAdmin();
+  if (!gate.ok) return gate;
   const supabase = await serverClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
 
-  // Resolve caller's clinic for the clinic_id stamp on new rows + verify the
-  // target doctor belongs to that clinic (RLS would also stop a cross-tenant
-  // write, but the explicit check produces a clear error message).
-  const { data: cu } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-  if (!cu?.clinic_id) return { ok: false, error: "Your account is not linked to a clinic." };
-
+  // Verify the target doctor belongs to the admin's clinic (clear error; RLS
+  // would also stop a cross-tenant write).
   const { data: doc } = await supabase
     .from("doctors")
     .select("id, clinic_id")
     .eq("id", input.doctorId)
-    .eq("clinic_id", cu.clinic_id)
+    .eq("clinic_id", gate.ctx.clinicId)
     .maybeSingle();
   if (!doc) return { ok: false, error: "Doctor not found in this clinic." };
 
@@ -431,7 +410,7 @@ export async function updateDoctorScheduleAction(
   let inserted = 0;
   if (input.rows.length > 0) {
     const rows = input.rows.map((r) => ({
-      clinic_id:    cu.clinic_id,
+      clinic_id:    gate.ctx.clinicId,
       doctor_id:    input.doctorId,
       weekday:      r.weekday,
       start_time:   r.start_time,
@@ -471,19 +450,97 @@ export async function reorderDoctorsAction(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
   }
+  const gate = await requireClinicAdmin();
+  if (!gate.ok) return gate;
   const supabase = await serverClient();
 
-  // Issue the updates in parallel. RLS scopes each update to the caller's
-  // clinic — if someone crafts an ID for another clinic, the WHERE clause
-  // simply matches zero rows.
+  // Issue the updates in parallel, double-scoped to the admin's clinic — a
+  // crafted ID for another clinic simply matches zero rows.
   const results = await Promise.all(
     parsed.data.doctorIds.map((id, idx) =>
-      supabase.from("doctors").update({ display_order: idx + 1 }).eq("id", id),
+      supabase
+        .from("doctors")
+        .update({ display_order: idx + 1 })
+        .eq("id", id)
+        .eq("clinic_id", gate.ctx.clinicId),
     ),
   );
   const firstErr = results.find((r) => r.error)?.error;
   if (firstErr) return { ok: false, error: firstErr.message };
 
   await revalidateActiveClinicPath("/admin/doctors");
+  return { ok: true };
+}
+
+// =============================================================================
+// Create / invite a login for a doctor profile.
+//
+// Creates (or reuses) an auth user and links it to this clinic with role
+// 'doctor' and doctor_id pointing at the profile. The doctor can then sign in
+// and will see only their own data. Admins only.
+// =============================================================================
+
+const createLoginSchema = z.object({
+  doctorId:    z.string().uuid(),
+  email:       z.string().trim().email("Enter a valid email"),
+  displayName: z.string().trim().min(2, "Display name is required"),
+  phone:       z.string().trim().optional(),
+});
+
+export type CreateDoctorLoginInput = z.infer<typeof createLoginSchema>;
+
+export async function createDoctorLoginAction(
+  rawInput: CreateDoctorLoginInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = createLoginSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+  const input = parsed.data;
+
+  const gate = await requireClinicAdmin();
+  if (!gate.ok) return gate;
+
+  const admin = serviceClient();
+
+  // The profile must belong to the admin's clinic.
+  const { data: doc } = await admin
+    .from("doctors")
+    .select("id")
+    .eq("id", input.doctorId)
+    .eq("clinic_id", gate.ctx.clinicId)
+    .maybeSingle();
+  if (!doc) return { ok: false, error: "Doctor profile not found in this clinic." };
+
+  // Create the auth user (or reuse an existing one with this email).
+  let authUserId: string;
+  const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
+    input.email,
+    { data: { display_name: input.displayName } },
+  );
+  if (invited?.user) {
+    authUserId = invited.user.id;
+  } else if (inviteErr?.message?.toLowerCase().includes("already")) {
+    const { data: users } = await admin.auth.admin.listUsers();
+    const existing = users?.users?.find((u) => u.email?.toLowerCase() === input.email.toLowerCase());
+    if (!existing) return { ok: false, error: inviteErr?.message ?? "Failed to invite user." };
+    authUserId = existing.id;
+  } else {
+    return { ok: false, error: inviteErr?.message ?? "Failed to invite user." };
+  }
+
+  const linked = await linkAuthUserToClinic({
+    authUserId,
+    email:       input.email,
+    clinicId:    gate.ctx.clinicId,
+    role:        "doctor",
+    displayName: input.displayName,
+    phone:       input.phone,
+    doctorId:    input.doctorId,
+  });
+  if (!linked.ok) return linked;
+
+  await revalidateActiveClinicPath("/admin/doctors");
+  await revalidateActiveClinicPath("/admin/settings/team");
   return { ok: true };
 }

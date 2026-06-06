@@ -3,31 +3,11 @@
 import { revalidateActiveClinicPath } from "@/lib/routing/active-slug";
 import { z } from "zod";
 import { serverClient } from "@/lib/supabase/server";
+import { requireClinicAdmin } from "@/lib/auth/require-role";
 
 // =============================================================================
 // Helpers
 // =============================================================================
-
-async function requireClinicAdmin(): Promise<
-  | { ok: true; clinicId: string }
-  | { ok: false; error: string }
-> {
-  const supabase = await serverClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
-  const { data: cu } = await supabase
-    .from("clinic_users")
-    .select("clinic_id, role")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-
-  if (!cu?.clinic_id) return { ok: false, error: "Your account is not linked to a clinic." };
-  if (cu.role !== "clinic_admin") return { ok: false, error: "Only clinic admins can manage departments." };
-  return { ok: true, clinicId: cu.clinic_id };
-}
 
 function slugify(input: string): string {
   return input
@@ -78,7 +58,7 @@ export async function createDepartmentAction(
   const { data, error } = await supabase
     .from("departments")
     .insert({
-      clinic_id:     gate.clinicId,
+      clinic_id:     gate.ctx.clinicId,
       name:          parsed.data.name,
       slug,
       display_order: displayOrder,
@@ -133,7 +113,7 @@ export async function updateDepartmentAction(
     .from("departments")
     .update(patch)
     .eq("id", id)
-    .eq("clinic_id", gate.clinicId);
+    .eq("clinic_id", gate.ctx.clinicId);
 
   if (error) return { ok: false, error: error.message };
 

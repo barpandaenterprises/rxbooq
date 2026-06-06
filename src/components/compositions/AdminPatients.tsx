@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { AddPatientDialog } from "@/components/molecules/AddPatientDialog";
 import type { PatientLang, PatientRow } from "@/lib/data/admin-patients";
+import type { DoctorOption } from "@/lib/data/admin-team";
 
 type Lang = PatientLang;
 type Patient = PatientRow;
@@ -179,7 +180,13 @@ function FilterPill({
   );
 }
 
-export function AdminPatients({ initialPatients }: { initialPatients: Patient[] }) {
+export function AdminPatients({
+  initialPatients,
+  doctors = [],
+}: {
+  initialPatients: Patient[];
+  doctors?: DoctorOption[];
+}) {
   const patients = initialPatients;
   const [search, setSearch] = useState("");
   const [lang, setLang] = useState<Lang | "all">("all");
@@ -289,6 +296,7 @@ export function AdminPatients({ initialPatients }: { initialPatients: Patient[] 
             <i className="fas fa-file-export" /> Export CSV
           </button>
           <AddPatientDialog
+            doctors={doctors}
             trigger={
               <button
                 type="button"

@@ -7,9 +7,12 @@ import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { createPatientAction } from "@/app/(clinic-app)/[clinicSlug]/admin/patients/actions";
+import type { DoctorOption } from "@/lib/data/admin-team";
 
 type Props = {
   trigger: React.ReactNode;
+  /** Clinic doctors for the assigned-doctor dropdown. */
+  doctors?: DoctorOption[];
 };
 
 const TAG_PRESETS = ["VIP", "New", "Root canal", "Implants", "Pediatric", "Braces"];
@@ -29,6 +32,7 @@ const patientFormSchema = z.object({
   language:      z.enum(["en", "hi", "or"]),
   dateOfBirth:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal("")).optional(),
   gender:        z.enum(["M", "F", "O", ""]).optional(),
+  assignedDoctorId: z.string().uuid().or(z.literal("")).optional(),
   tags:          z.array(z.string()),
   whatsappOptIn: z.boolean(),
   notes:         z.string().optional(),
@@ -42,6 +46,7 @@ const DEFAULT_VALUES: PatientFormValues = {
   language:      "en",
   dateOfBirth:   "",
   gender:        "",
+  assignedDoctorId: "",
   tags:          [],
   whatsappOptIn: true,
   notes:         "",
@@ -51,7 +56,7 @@ const DEFAULT_VALUES: PatientFormValues = {
 // Component
 // =============================================================================
 
-export function AddPatientDialog({ trigger }: Props) {
+export function AddPatientDialog({ trigger, doctors = [] }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -83,6 +88,7 @@ export function AddPatientDialog({ trigger }: Props) {
         language:      values.language,
         dateOfBirth:   values.dateOfBirth || undefined,
         gender:        values.gender ? (values.gender as "M" | "F" | "O") : undefined,
+        assignedDoctorId: values.assignedDoctorId || undefined,
         tags:          values.tags,
         whatsappOptIn: values.whatsappOptIn,
         notes:         values.notes?.trim() || undefined,
@@ -179,6 +185,17 @@ export function AddPatientDialog({ trigger }: Props) {
                     </select>
                   </Field>
                 </div>
+
+                {doctors.length > 0 && (
+                  <Field label="Assigned doctor">
+                    <select {...register("assignedDoctorId")} className={inputCls(false) + " cursor-pointer"}>
+                      <option value="">— Unassigned —</option>
+                      {doctors.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
               </Section>
 
               <Section label="Tags">

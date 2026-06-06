@@ -10,7 +10,8 @@
 
 import { serverClient } from "@/lib/supabase/server";
 import { useMockData } from "@/lib/feature-flags";
-import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
+import { getActiveMembership } from "@/lib/auth/current-user";
+import { doctorPatientIds } from "@/lib/data/doctor-scope";
 
 // =============================================================================
 // Canonical type (matches AdminPatients UI expectations)
@@ -145,18 +146,32 @@ type DbAppointment = {
 };
 
 async function getLivePatients(): Promise<PatientRow[]> {
-  // Explicit clinic scope — see getCurrentStaffClinicId comment for why we
-  // can't rely on RLS alone here (superadmin bypass).
-  const clinicId = await getCurrentStaffClinicId();
-  if (!clinicId) return [];
+  // Explicit clinic scope — see getActiveMembership comment for why we can't
+  // rely on RLS alone here (superadmin bypass).
+  const membership = await getActiveMembership();
+  if (!membership) return [];
+  const clinicId = membership.clinicId;
 
   const supabase = await serverClient();
+
+  // A doctor sees only their patients: assigned to them OR they have an
+  // appointment with. Unlinked doctor logins see nothing (fail-closed).
+  let allowedIds: Set<string> | null = null;
+  if (membership.role === "doctor") {
+    if (!membership.doctorId) return [];
+    allowedIds = await doctorPatientIds(supabase, clinicId, membership.doctorId);
+    if (allowedIds.size === 0) return [];
+  }
+
+  let patientsQuery = supabase
+    .from("patients")
+    .select("id, full_name, phone_e164, language, whatsapp_opt_in, tags, created_at")
+    .eq("clinic_id", clinicId)
+    .order("created_at", { ascending: false });
+  if (allowedIds) patientsQuery = patientsQuery.in("id", Array.from(allowedIds));
+
   const [{ data: patientRows, error: pErr }, { data: apptRows }] = await Promise.all([
-    supabase
-      .from("patients")
-      .select("id, full_name, phone_e164, language, whatsapp_opt_in, tags, created_at")
-      .eq("clinic_id", clinicId)
-      .order("created_at", { ascending: false }),
+    patientsQuery,
     supabase
       .from("appointments")
       .select("patient_id, starts_at, status")

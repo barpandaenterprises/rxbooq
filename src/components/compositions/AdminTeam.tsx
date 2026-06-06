@@ -8,10 +8,11 @@ import { z } from "zod";
 import {
   deactivateClinicUserAction,
   inviteClinicUserAction,
+  setClinicUserDoctorAction,
   updateClinicUserRoleAction,
 } from "@/app/(clinic-app)/[clinicSlug]/admin/settings/team/actions";
 import { SettingsTabs } from "@/components/molecules/SettingsTabs";
-import type { ClinicUserRole, TeamMember } from "@/lib/data/admin-team";
+import type { ClinicUserRole, DoctorOption, TeamMember } from "@/lib/data/admin-team";
 
 const ROLE_LABEL: Record<ClinicUserRole, string> = {
   clinic_admin: "Admin",
@@ -30,6 +31,8 @@ const inviteSchema = z.object({
   displayName: z.string().trim().min(2, "Display name is required"),
   role:        z.enum(["clinic_admin", "doctor", "receptionist"]),
   phone:       z.string().trim().optional(),
+  /** Only meaningful when role === 'doctor'. */
+  doctorId:    z.string().uuid().optional().or(z.literal("")),
 });
 
 type InviteValues = z.infer<typeof inviteSchema>;
@@ -40,7 +43,13 @@ function inputCls(hasError: boolean): string {
   return hasError ? `${base} border-danger focus:border-danger` : `${base} border-border`;
 }
 
-export function AdminTeam({ initialMembers }: { initialMembers: TeamMember[] }) {
+export function AdminTeam({
+  initialMembers,
+  doctorOptions = [],
+}: {
+  initialMembers: TeamMember[];
+  doctorOptions?: DoctorOption[];
+}) {
   const router = useRouter();
   // Render straight from the prop: invites call router.refresh(), which re-runs
   // the server component and feeds a fresh list down. Holding it in useState
@@ -55,25 +64,51 @@ export function AdminTeam({ initialMembers }: { initialMembers: TeamMember[] }) 
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<InviteValues>({
     resolver:      zodResolver(inviteSchema),
-    defaultValues: { email: "", displayName: "", role: "receptionist", phone: "" },
+    defaultValues: { email: "", displayName: "", role: "receptionist", phone: "", doctorId: "" },
     mode:          "onBlur",
   });
+
+  const inviteRole = watch("role");
 
   const onInvite = (values: InviteValues) => {
     if (isInviting) return;
     setBannerError(null);
     setBannerSuccess(null);
     startInvite(async () => {
-      const result = await inviteClinicUserAction(values);
+      const result = await inviteClinicUserAction({
+        email:       values.email,
+        displayName: values.displayName,
+        role:        values.role,
+        phone:       values.phone,
+        doctorId:    values.role === "doctor" && values.doctorId ? values.doctorId : undefined,
+      });
       if (!result.ok) {
         setBannerError(result.error);
         return;
       }
       setBannerSuccess(`Invitation sent to ${values.email}.`);
-      reset({ email: "", displayName: "", role: "receptionist", phone: "" });
+      reset({ email: "", displayName: "", role: "receptionist", phone: "", doctorId: "" });
+      router.refresh();
+    });
+  };
+
+  const onLinkDoctor = (clinicUserId: string, doctorId: string) => {
+    if (isPatching) return;
+    setBannerError(null);
+    setBannerSuccess(null);
+    startPatch(async () => {
+      const result = await setClinicUserDoctorAction({
+        clinicUserId,
+        doctorId: doctorId || null,
+      });
+      if (!result.ok) {
+        setBannerError(result.error);
+        return;
+      }
       router.refresh();
     });
   };
@@ -191,6 +226,24 @@ export function AdminTeam({ initialMembers }: { initialMembers: TeamMember[] }) 
             )}
           </button>
         </form>
+        {inviteRole === "doctor" && (
+          <div className="mt-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-heading">
+              Doctor profile <span className="text-[#9aa9b8]">(optional — links this login to a profile)</span>
+            </label>
+            <select {...register("doctorId")} className={inputCls(false) + " cursor-pointer sm:max-w-[320px]"}>
+              <option value="">— Link later —</option>
+              {doctorOptions.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            {doctorOptions.length === 0 && (
+              <p className="mt-1 text-[11px] text-[#9aa9b8]">
+                No doctor profiles yet — add one under Doctors, then link it here.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Team list */}
@@ -254,6 +307,22 @@ export function AdminTeam({ initialMembers }: { initialMembers: TeamMember[] }) 
                         <option value="doctor">Doctor</option>
                         <option value="clinic_admin">Admin</option>
                       </select>
+                    )}
+                    {m.role === "doctor" && (
+                      <div className="mt-1.5">
+                        <select
+                          value={m.doctorId ?? ""}
+                          disabled={isPatching}
+                          onChange={(e) => onLinkDoctor(m.id, e.target.value)}
+                          title="Linked doctor profile"
+                          className="cursor-pointer rounded-md border border-border bg-white px-2 py-1 text-[11px] text-muted outline-none focus:border-link-hover"
+                        >
+                          <option value="">— No profile —</option>
+                          {doctorOptions.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-3 text-[12px] text-muted">{m.joinedAt}</td>

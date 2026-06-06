@@ -7,7 +7,8 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
-import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
+import { getActiveMembership } from "@/lib/auth/current-user";
+import { doctorPatientIds } from "@/lib/data/doctor-scope";
 import { useMockData } from "@/lib/feature-flags";
 
 export type ThreadStatus = "delivered" | "read" | "replied" | "failed" | "optout";
@@ -183,12 +184,22 @@ type DbMessage = {
 };
 
 async function getLiveThreads(): Promise<Thread[]> {
-  const clinicId = await getCurrentStaffClinicId();
-  if (!clinicId) return [];
+  const membership = await getActiveMembership();
+  if (!membership) return [];
+  const clinicId = membership.clinicId;
 
   const supabase = await serverClient();
 
-  const { data: rows, error } = await supabase
+  // A doctor's inbox is read-only and scoped to their patients (assigned or
+  // appointment). wa_messages has no doctor_id, so filter by patient set.
+  let allowedIds: Set<string> | null = null;
+  if (membership.role === "doctor") {
+    if (!membership.doctorId) return [];
+    allowedIds = await doctorPatientIds(supabase, clinicId, membership.doctorId);
+    if (allowedIds.size === 0) return [];
+  }
+
+  let query = supabase
     .from("wa_messages")
     .select(`
       id, patient_id, template_name, direction, payload, status, error, created_at,
@@ -196,6 +207,9 @@ async function getLiveThreads(): Promise<Thread[]> {
     `)
     .eq("clinic_id", clinicId)
     .order("created_at", { ascending: true });
+  if (allowedIds) query = query.in("patient_id", Array.from(allowedIds));
+
+  const { data: rows, error } = await query;
 
   if (error) {
     console.error("[admin-messages] wa_messages query failed:", error.message);

@@ -6,7 +6,7 @@
  */
 
 import { serverClient } from "@/lib/supabase/server";
-import { getCurrentStaffClinicId } from "@/lib/auth/current-user";
+import { getActiveMembership } from "@/lib/auth/current-user";
 import { useMockData } from "@/lib/feature-flags";
 
 export type CalendarApptStatus = "confirmed" | "booked" | "completed" | "noshow" | "cancelled";
@@ -114,23 +114,28 @@ type DbRow = {
 };
 
 async function getLiveCalendar(mondayIst: Date): Promise<CalendarAppt[]> {
-  const clinicId = await getCurrentStaffClinicId();
-  if (!clinicId) return [];
+  const membership = await getActiveMembership();
+  if (!membership) return [];
+  const scopeDoctorId = membership.role === "doctor" ? membership.doctorId : null;
+  if (membership.role === "doctor" && !scopeDoctorId) return [];
 
   const supabase = await serverClient();
   const end = new Date(mondayIst.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-  const { data: rows, error } = await supabase
+  let query = supabase
     .from("appointments")
     .select(`
       id, starts_at, ends_at, status,
       patient:patients ( full_name ),
       doctor:doctors  ( display_name )
     `)
-    .eq("clinic_id", clinicId)
+    .eq("clinic_id", membership.clinicId)
     .gte("starts_at", mondayIst.toISOString())
     .lt("starts_at",  end.toISOString())
     .order("starts_at", { ascending: true });
+  if (scopeDoctorId) query = query.eq("doctor_id", scopeDoctorId);
+
+  const { data: rows, error } = await query;
 
   if (error) {
     console.error("[admin-calendar] query failed:", error.message);

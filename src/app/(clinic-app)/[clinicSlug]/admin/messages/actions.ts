@@ -3,6 +3,7 @@
 import { revalidateActiveClinicPath } from "@/lib/routing/active-slug";
 import { z } from "zod";
 import { serverClient } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/require-role";
 import { sendWaSession, sendWaTemplate } from "@/lib/wa/send";
 import type { WaLocale } from "@/lib/wa/types";
 
@@ -35,16 +36,19 @@ export async function sendInboxReplyAction(
   }
   const input = parsed.data;
 
-  const supabase = await serverClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
+  // Doctors have a read-only inbox; replying is front-desk / admin work.
+  const gate = await requireRole(["clinic_admin", "receptionist"]);
+  if (!gate.ok) return gate;
 
-  // RLS scopes the patient lookup to the caller's clinic; if the patient isn't
+  const supabase = await serverClient();
+
+  // Scope the patient lookup to the caller's clinic; if the patient isn't
   // visible, the row comes back null and we refuse.
   const { data: patient } = await supabase
     .from("patients")
     .select("id, clinic_id, phone_e164, whatsapp_opt_in")
     .eq("id", input.patientId)
+    .eq("clinic_id", gate.ctx.clinicId)
     .maybeSingle();
   if (!patient) {
     return { ok: false, error: "Patient not visible to this clinic." };
@@ -146,25 +150,20 @@ async function resolveCallerClinic(): Promise<
   | { ok: true; clinicId: string; clinicName: string }
   | { ok: false; error: string }
 > {
+  // Broadcasting / sending templates is front-desk / admin work — doctors are
+  // excluded. Also resolves the active clinic correctly for multi-clinic users.
+  const gate = await requireRole(["clinic_admin", "receptionist"]);
+  if (!gate.ok) return gate;
+
   const supabase = await serverClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Not signed in." };
-
-  const { data: cu } = await supabase
-    .from("clinic_users")
-    .select("clinic_id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-  if (!cu?.clinic_id) return { ok: false, error: "Your account is not linked to a clinic." };
-
   const { data: clinic } = await supabase
     .from("clinics")
     .select("name")
-    .eq("id", cu.clinic_id)
+    .eq("id", gate.ctx.clinicId)
     .maybeSingle();
   return {
     ok: true,
-    clinicId:   cu.clinic_id,
+    clinicId:   gate.ctx.clinicId,
     clinicName: clinic?.name ?? "Our clinic",
   };
 }
