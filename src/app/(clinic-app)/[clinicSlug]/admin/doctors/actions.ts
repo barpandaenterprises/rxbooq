@@ -154,6 +154,8 @@ export type UpdateDoctorInput = {
   phone?:             string | null;
   email?:             string | null;
   primarySpecialty?:  string | null;
+  /** FK to public.departments. "" / null clears the assignment (unassigned). */
+  departmentId?:      string | null;
   visiting?:          boolean;
   visitingNote?:      string | null;
   status?:            AddDoctorStatus;
@@ -196,6 +198,7 @@ export async function updateDoctorAction(
   if (input.phone              !== undefined) patch.phone             = input.phone;
   if (input.email              !== undefined) patch.email             = input.email;
   if (input.primarySpecialty   !== undefined) patch.primary_specialty = input.primarySpecialty;
+  if (input.departmentId       !== undefined) patch.department_id     = input.departmentId || null;
   if (input.visiting           !== undefined) patch.visiting          = input.visiting;
   if (input.visitingNote       !== undefined) patch.visiting_note     = input.visitingNote;
   if (input.status             !== undefined) {

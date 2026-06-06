@@ -2,12 +2,13 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { updateDoctorAction } from "@/app/(clinic-app)/[clinicSlug]/admin/doctors/actions";
 import { DoctorPhotoField, fileToDataUrl } from "@/components/molecules/DoctorPhotoField";
+import type { Department } from "@/lib/data/departments";
 import {
   SPECIALTIES,
   type Doctor,
@@ -20,6 +21,8 @@ type Props = {
   /** When provided, renders as a click-target for opening the dialog. */
   trigger?:      React.ReactNode;
   doctor:        Doctor;
+  /** Clinic's departments, for the assignment dropdown. */
+  departments?:  Department[];
   /** Optional controlled-mode — open state owned by the parent. */
   open?:         boolean;
   onOpenChange?: (open: boolean) => void;
@@ -41,6 +44,7 @@ const editDoctorSchema = z.object({
       "Enter a whole number between 0 and 80",
     ),
   primarySpecialty:   z.enum(SPECIALTIES as unknown as [Specialty, ...Specialty[]]),
+  departmentId:       z.string().uuid().optional().or(z.literal("")),
   trainedAt:          z.string().trim().optional().default(""),
   phone:              z
     .string()
@@ -77,8 +81,10 @@ function localPhone(formatted: string): string {
 // Component
 // =============================================================================
 
-export function EditDoctorDialog({ trigger, doctor, open: controlledOpen, onOpenChange }: Props) {
+export function EditDoctorDialog({ trigger, doctor, departments = [], open: controlledOpen, onOpenChange }: Props) {
   const router = useRouter();
+  const params = useParams<{ clinicSlug: string }>();
+  const slug   = params?.clinicSlug ?? "";
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = (next: boolean) => {
@@ -96,6 +102,7 @@ export function EditDoctorDialog({ trigger, doctor, open: controlledOpen, onOpen
     registrationNumber: doctor.registrationNumber,
     yearsExperience:    doctor.stats.yearsExperience ? String(doctor.stats.yearsExperience) : "",
     primarySpecialty:   doctor.primarySpecialty,
+    departmentId:       doctor.departmentId ?? "",
     trainedAt:          doctor.trainedAt && doctor.trainedAt !== "—" ? doctor.trainedAt : "",
     phone:              localPhone(doctor.phone ?? ""),
     email:              doctor.email ?? "",
@@ -154,6 +161,7 @@ export function EditDoctorDialog({ trigger, doctor, open: controlledOpen, onOpen
         phone:              phoneDigits ? `+91${phoneDigits.slice(-10)}` : null,
         email:              values.email || null,
         primarySpecialty:   values.primarySpecialty,
+        departmentId:       values.departmentId || null,
         visiting:           values.visiting,
         visitingNote:       values.visiting ? (values.visitingNote || null) : null,
         status:             values.status,
@@ -253,6 +261,24 @@ export function EditDoctorDialog({ trigger, doctor, open: controlledOpen, onOpen
                     />
                   </Field>
                 </div>
+
+                <Field label="Department" error={errors.departmentId?.message}>
+                  <select
+                    {...register("departmentId")}
+                    className={inputCls(!!errors.departmentId) + " cursor-pointer"}
+                    disabled={departments.length === 0}
+                  >
+                    <option value="">— Unassigned —</option>
+                    {departments.map((dep) => (
+                      <option key={dep.id} value={dep.id}>{dep.name}</option>
+                    ))}
+                  </select>
+                  {departments.length === 0 && (
+                    <p className="mt-1 text-[11px] text-[#9aa9b8]">
+                      No departments yet — add one in <a href={`/${slug}/admin/settings/departments`} className="text-link-hover hover:underline">Settings → Departments</a>.
+                    </p>
+                  )}
+                </Field>
 
                 <Field label="Trained at">
                   <input {...register("trainedAt")} className={inputCls(false)} />

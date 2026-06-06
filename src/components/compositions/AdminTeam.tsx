@@ -42,7 +42,10 @@ function inputCls(hasError: boolean): string {
 
 export function AdminTeam({ initialMembers }: { initialMembers: TeamMember[] }) {
   const router = useRouter();
-  const [members] = useState(initialMembers);
+  // Render straight from the prop: invites call router.refresh(), which re-runs
+  // the server component and feeds a fresh list down. Holding it in useState
+  // would freeze the list at mount-time and require a hard reload.
+  const members = initialMembers;
   const [bannerError, setBannerError] = useState<string | null>(null);
   const [bannerSuccess, setBannerSuccess] = useState<string | null>(null);
   const [isInviting, startInvite] = useTransition();

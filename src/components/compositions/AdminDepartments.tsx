@@ -31,7 +31,10 @@ type Props = {
 
 export function AdminDepartments({ initialDepartments }: Props) {
   const router = useRouter();
-  const [departments] = useState(initialDepartments);
+  // Render straight from the prop: every mutation calls router.refresh(), which
+  // re-runs the server component and feeds a fresh list down. Holding it in
+  // useState would freeze the list at mount-time and require a hard reload.
+  const departments = initialDepartments;
   const [bannerError, setBannerError] = useState<string | null>(null);
   const [bannerSuccess, setBannerSuccess] = useState<string | null>(null);
   const [isCreating, startCreate] = useTransition();

@@ -399,7 +399,7 @@ export function AdminDoctors({
                     </td>
                   </tr>
                 ) : (
-                  sorted.map((d) => <DoctorRow key={d.id} d={d} draggable={!dragDisabled} />)
+                  sorted.map((d) => <DoctorRow key={d.id} d={d} draggable={!dragDisabled} departments={departments} />)
                 )}
               </tbody>
             </table>
@@ -421,7 +421,7 @@ export function AdminDoctors({
   );
 }
 
-function DoctorRow({ d, draggable }: { d: Doctor; draggable: boolean }) {
+function DoctorRow({ d, draggable, departments }: { d: Doctor; draggable: boolean; departments: Department[] }) {
   const params = useParams<{ clinicSlug: string }>();
   const slug   = params?.clinicSlug ?? "";
   const status = STATUS_META[d.status];
@@ -510,7 +510,7 @@ function DoctorRow({ d, draggable }: { d: Doctor; draggable: boolean }) {
         )}
       </td>
       <td className="px-3 py-3 pr-4 text-right">
-        <DoctorRowMenu d={d} />
+        <DoctorRowMenu d={d} departments={departments} />
       </td>
     </tr>
   );
@@ -558,7 +558,7 @@ function DoctorCardMobile({ d }: { d: Doctor }) {
   );
 }
 
-function DoctorRowMenu({ d }: { d: Doctor }) {
+function DoctorRowMenu({ d, departments }: { d: Doctor; departments: Department[] }) {
   const router = useRouter();
   const params = useParams<{ clinicSlug: string }>();
   const slug   = params?.clinicSlug ?? "";
@@ -668,7 +668,7 @@ function DoctorRowMenu({ d }: { d: Doctor }) {
       </DropdownMenu.Root>
 
       {/* Controlled dialogs — triggered by the menu items above. */}
-      <EditDoctorDialog  doctor={d}                                   open={editOpen}  onOpenChange={setEditOpen} />
+      <EditDoctorDialog  doctor={d} departments={departments}         open={editOpen}  onOpenChange={setEditOpen} />
       <BlockDatesDialog  doctorId={d.id} doctorName={d.name}          open={blockOpen} onOpenChange={setBlockOpen} />
     </>
   );

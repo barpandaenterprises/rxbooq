@@ -87,6 +87,11 @@ export async function middleware(req: NextRequest) {
     const rewriteUrl = new URL(target + req.nextUrl.search, req.url);
     const rewriteResponse = NextResponse.rewrite(rewriteUrl);
     rewriteResponse.headers.set("x-active-clinic-slug", hostSlug);
+    // Public-page server actions resolve the tenant via getCurrentClinic(),
+    // which reads x-clinic-slug. Without this the apex `?clinic=` dev override
+    // (and any host-resolved slug) leaves booking actions unable to find the
+    // clinic — slots come back empty. Mirror the non-rewrite branch below.
+    rewriteResponse.headers.set("x-clinic-slug", hostSlug);
     if (host && !APEX_HOSTS.has(host)) rewriteResponse.headers.set("x-host", host);
     return rewriteResponse;
   }
