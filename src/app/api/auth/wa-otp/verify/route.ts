@@ -25,20 +25,13 @@ import { z } from "zod";
 import { serviceClient } from "@/lib/supabase/server";
 import { getCurrentClinic } from "@/lib/booking/current-clinic";
 import { useMockData } from "@/lib/feature-flags";
+import { toE164 } from "@/lib/phone";
 
 const verifySchema = z.object({
   phone: z.string().trim().min(8, "Enter your phone number"),
   code:  z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code"),
   next:  z.string().optional(),
 });
-
-function normalizePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
-  if (digits.length === 10) return `+91${digits}`;
-  if (digits.length > 10) return `+${digits}`;
-  return raw;
-}
 
 function hashCode(code: string): string {
   return createHash("sha256").update(code).digest("hex");
@@ -75,7 +68,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const phoneE164 = normalizePhone(parsed.data.phone);
+  const phoneE164 = toE164(parsed.data.phone);
   const code      = parsed.data.code;
   const next      = safeNext(parsed.data.next);
   const supabase  = serviceClient();

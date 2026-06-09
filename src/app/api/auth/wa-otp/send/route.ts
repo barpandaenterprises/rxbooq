@@ -22,18 +22,11 @@ import { serviceClient } from "@/lib/supabase/server";
 import { getCurrentClinic } from "@/lib/booking/current-clinic";
 import { sendWaTemplate } from "@/lib/wa/send";
 import { useMockData } from "@/lib/feature-flags";
+import { toE164 } from "@/lib/phone";
 
 const sendSchema = z.object({
   phone: z.string().trim().min(8, "Enter your phone number"),
 });
-
-function normalizePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-  if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
-  if (digits.length === 10) return `+91${digits}`;
-  if (digits.length > 10) return `+${digits}`;
-  return raw;
-}
 
 function hashCode(code: string): string {
   return createHash("sha256").update(code).digest("hex");
@@ -57,7 +50,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const phoneE164 = normalizePhone(parsed.data.phone);
+  const phoneE164 = toE164(parsed.data.phone);
   const supabase  = serviceClient();
 
   // Look up patient by clinic + phone. If absent, we still return 200 to avoid

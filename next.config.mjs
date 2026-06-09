@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // nodemailer uses dynamic require()s that the bundler can't resolve; bundling
+  // it makes transport.sendMail throw at runtime (works standalone, fails in
+  // the app). Keep it external so it loads from node_modules at runtime.
+  serverExternalPackages: ['nodemailer'],
   images: {
     remotePatterns: [
       // Allow Supabase Storage public buckets

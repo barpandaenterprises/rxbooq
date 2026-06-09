@@ -18,7 +18,7 @@ type Props = {
  */
 export function ClinicHomePage({ page, isTenantRoot }: Props) {
   const { clinic, doctors, services } = page;
-  const bookHref = isTenantRoot ? "/book" : `/book?clinic=${clinic.slug}`;
+  const bookHref = isTenantRoot ? "/book" : `/${clinic.slug}/book`;
 
   return (
     <ClinicSiteLayout

@@ -16,13 +16,16 @@ import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
 import { serviceClient } from "@/lib/supabase/server";
-import { sendSms } from "@/lib/sms/provider";
+import { interakt } from "@/lib/wa/interakt";
+import { sendEmail } from "@/lib/email/send";
+import { useMockData } from "@/lib/feature-flags";
 import {
   COOKIE_MAX_AGE,
   COOKIE_NAME,
   signDraftCookie,
   verifyDraftCookie,
   type DraftClaim,
+  type OnboardingChannel,
 } from "@/lib/onboarding/draft-cookie";
 import { quotePlan, type CouponScope, type PriceQuote } from "@/lib/billing/pricing";
 import {
@@ -40,7 +43,14 @@ const phoneSchema = z
   .trim()
   .regex(/^\+[1-9][0-9]{6,14}$/, "Use E.164 format, e.g. +919999900001");
 
+const emailSchema = z.string().trim().toLowerCase().email("Enter a valid email address");
+
 const otpSchema = z.string().trim().regex(/^[0-9]{6}$/, "Enter the 6-digit code");
+
+const contactSchema = z.object({
+  channel: z.enum(["phone", "email"]),
+  contact: z.string().trim().min(1),
+});
 
 const OTP_TTL_MIN          = 10;
 const OTP_RATE_WINDOW_MIN  = 5;
@@ -49,6 +59,37 @@ const OTP_MAX_ATTEMPTS     = 5;
 
 function hashOtp(code: string): string {
   return createHash("sha256").update(code).digest("hex");
+}
+
+/** Validate + normalize the contact for a channel. Returns null when invalid. */
+function normalizeContact(channel: OnboardingChannel, raw: string): string | null {
+  if (channel === "phone") {
+    const p = phoneSchema.safeParse(raw);
+    return p.success ? p.data : null;
+  }
+  const e = emailSchema.safeParse(raw);
+  return e.success ? e.data : null;
+}
+
+/** Deliver the code over the channel. Returns false on a hard delivery error. */
+async function deliverOtp(channel: OnboardingChannel, contact: string, code: string): Promise<boolean> {
+  const body = `Your Rxbooq verification code is ${code}. It expires in ${OTP_TTL_MIN} minutes.`;
+  try {
+    if (channel === "phone") {
+      await interakt.sendTemplate({
+        to:        contact,
+        template:  process.env.ONBOARDING_WA_OTP_TEMPLATE ?? "onboarding_otp_v1",
+        language:  "en",
+        variables: [code],
+      });
+      return true;
+    }
+    const res = await sendEmail({ to: contact, subject: "Your Rxbooq verification code", text: body });
+    return res.ok;
+  } catch (err) {
+    console.error(`[onboardingOtp] ${channel} delivery failed:`, err instanceof Error ? err.message : err);
+    return false;
+  }
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -62,16 +103,21 @@ function constantTimeEqual(a: string, b: string): boolean {
 // 1. sendOnboardingOtpAction
 // =============================================================================
 
+export type SendOtpInput = { channel: OnboardingChannel; contact: string };
+
 export type SendOtpResult =
-  | { ok: true; ttlSeconds: number }
+  | { ok: true; ttlSeconds: number; devCode?: string }
   | { ok: false; error: string };
 
-export async function sendOnboardingOtpAction(rawPhone: string): Promise<SendOtpResult> {
-  const parsed = phoneSchema.safeParse(rawPhone);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid phone" };
+export async function sendOnboardingOtpAction(input: SendOtpInput): Promise<SendOtpResult> {
+  const shape = contactSchema.safeParse(input);
+  if (!shape.success) return { ok: false, error: "Enter a valid mobile number or email." };
+  const { channel } = shape.data;
+  const contact = normalizeContact(channel, shape.data.contact);
+  if (!contact) {
+    return { ok: false, error: channel === "phone" ? "Use E.164 format, e.g. +919999900001" : "Enter a valid email address." };
   }
-  const phone = parsed.data;
+
   const supabase = serviceClient();
 
   // Rate-limit: at most OTP_RATE_MAX sends per OTP_RATE_WINDOW_MIN minutes.
@@ -79,7 +125,8 @@ export async function sendOnboardingOtpAction(rawPhone: string): Promise<SendOtp
   const { count } = await supabase
     .from("phone_otp_verifications")
     .select("*", { count: "exact", head: true })
-    .eq("phone_e164", phone)
+    .eq("channel", channel)
+    .eq("contact", contact)
     .gte("created_at", since);
 
   if ((count ?? 0) >= OTP_RATE_MAX) {
@@ -92,7 +139,10 @@ export async function sendOnboardingOtpAction(rawPhone: string): Promise<SendOtp
   const expires  = new Date(Date.now() + OTP_TTL_MIN * 60_000).toISOString();
 
   const { error: insErr } = await supabase.from("phone_otp_verifications").insert({
-    phone_e164: phone,
+    channel,
+    contact,
+    // Keep phone_e164 populated for the phone channel (back-compat / audit).
+    phone_e164: channel === "phone" ? contact : null,
     code_hash:  codeHash,
     purpose:    "onboarding",
     expires_at: expires,
@@ -102,16 +152,15 @@ export async function sendOnboardingOtpAction(rawPhone: string): Promise<SendOtp
     return { ok: false, error: "Could not send code. Try again." };
   }
 
-  const sms = await sendSms({
-    to:   phone,
-    body: `Your Rxbooq code is ${code}. It expires in ${OTP_TTL_MIN} minutes.`,
-  });
-  if (!sms.ok) {
-    // Don't reveal provider details to the user; the OTP row is already saved
-    // so they can hit Resend.
-    console.error("[sendOnboardingOtp] sms send failed:", sms.error);
+  const delivered = await deliverOtp(channel, contact, code);
+  // In mock/dev, surface the real code so the flow is testable without a
+  // provider — this is NOT a bypass; verification still checks the real hash.
+  if (useMockData()) {
+    return { ok: true, ttlSeconds: OTP_TTL_MIN * 60, devCode: code };
   }
-
+  if (!delivered) {
+    return { ok: false, error: "Could not send the code. Check the details and try again." };
+  }
   return { ok: true, ttlSeconds: OTP_TTL_MIN * 60 };
 }
 
@@ -125,23 +174,26 @@ export type VerifyOtpResult =
   | { ok: true; draftId: string; lastStep: string | null }
   | { ok: false; error: string };
 
-export async function verifyOnboardingOtpAction(
-  rawPhone: string,
-  rawCode:  string,
-): Promise<VerifyOtpResult> {
-  const phoneParsed = phoneSchema.safeParse(rawPhone);
-  const codeParsed  = otpSchema.safeParse(rawCode);
-  if (!phoneParsed.success) return { ok: false, error: "Invalid phone" };
-  if (!codeParsed.success)  return { ok: false, error: "Enter the 6-digit code" };
+export type VerifyOtpInput = { channel: OnboardingChannel; contact: string; code: string };
 
-  const phone    = phoneParsed.data;
+export async function verifyOnboardingOtpAction(input: VerifyOtpInput): Promise<VerifyOtpResult> {
+  const shape = contactSchema.safeParse(input);
+  const codeParsed = otpSchema.safeParse(input?.code ?? "");
+  if (!shape.success) return { ok: false, error: "Enter a valid mobile number or email." };
+  if (!codeParsed.success) return { ok: false, error: "Enter the 6-digit code" };
+
+  const channel = shape.data.channel;
+  const contact = normalizeContact(channel, shape.data.contact);
+  if (!contact) return { ok: false, error: "Enter a valid mobile number or email." };
+
   const supabase = serviceClient();
 
-  // Most recent unconsumed OTP for this phone.
+  // Most recent unconsumed OTP for this contact.
   const { data: otp, error: otpErr } = await supabase
     .from("phone_otp_verifications")
     .select("id, code_hash, expires_at, attempts, consumed_at")
-    .eq("phone_e164", phone)
+    .eq("channel", channel)
+    .eq("contact", contact)
     .is("consumed_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -155,17 +207,8 @@ export async function verifyOnboardingOtpAction(
     return { ok: false, error: "Too many attempts. Request a new code." };
   }
 
-  // DEV OTP BYPASS — while SMS_PROVIDER is unset or stubbed to "console", the
-  // generated code is only printed to the server log so testers can't see it.
-  // Accept any well-formed 6-digit code in that environment. Auto-disables
-  // the moment a real provider is configured.
-  const smsBypass = (process.env.SMS_PROVIDER ?? "console").toLowerCase() === "console";
-
-  const ok = smsBypass || constantTimeEqual(otp.code_hash, hashOtp(codeParsed.data));
-  if (smsBypass) {
-    console.warn("[verifyOnboardingOtp] DEV BYPASS — any 6-digit code accepted (SMS_PROVIDER is 'console')");
-  }
-  if (!ok) {
+  // Real verification — always compare against the stored hash. No bypass.
+  if (!constantTimeEqual(otp.code_hash, hashOtp(codeParsed.data))) {
     await supabase
       .from("phone_otp_verifications")
       .update({ attempts: otp.attempts + 1 })
@@ -178,11 +221,11 @@ export async function verifyOnboardingOtpAction(
     .update({ consumed_at: new Date().toISOString() })
     .eq("id", otp.id);
 
-  // Find an existing draft for this phone, else create one.
+  // Find an existing draft for this contact, else create one.
   const { data: existing } = await supabase
     .from("clinic_applications")
     .select("id, last_step_completed")
-    .eq("phone_e164", phone)
+    .eq("onboarding_contact", contact)
     .eq("status", "draft")
     .maybeSingle();
 
@@ -196,9 +239,13 @@ export async function verifyOnboardingOtpAction(
     const { data: created, error: cErr } = await supabase
       .from("clinic_applications")
       .insert({
-        phone_e164:           phone,
-        status:               "draft",
-        last_step_completed:  "phone",
+        onboarding_channel:  channel,
+        onboarding_contact:  contact,
+        // Prefill the matching clinic-contact field from the verified value.
+        phone_e164:          channel === "phone" ? contact : null,
+        primary_email:       channel === "email" ? contact : null,
+        status:              "draft",
+        last_step_completed: "phone",
         // doctor_languages defaults to {en} via column default
       })
       .select("id")
@@ -211,7 +258,7 @@ export async function verifyOnboardingOtpAction(
   }
 
   // Sign + set the cookie.
-  const claim: DraftClaim = { draftId, phone, issuedAt: Date.now() };
+  const claim: DraftClaim = { draftId, channel, contact, issuedAt: Date.now() };
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, signDraftCookie(claim), {
     httpOnly: true,
@@ -247,7 +294,8 @@ async function loadDraftFromCookie(): Promise<
     .maybeSingle();
 
   if (!draft) return null;
-  if (draft.phone_e164 !== claim.phone) return null;
+  // The cookie's verified contact must match the draft's onboarding identity.
+  if ((draft.onboarding_contact ?? draft.phone_e164) !== claim.contact) return null;
   return { claim, draft: draft as DraftRow };
 }
 
@@ -255,6 +303,8 @@ type DraftRow = {
   id:                        string;
   auth_user_id:              string | null;
   status:                    string;
+  onboarding_channel:        string | null;
+  onboarding_contact:        string | null;
   phone_e164:                string | null;
   clinic_name:               string | null;
   suggested_slug:            string | null;
@@ -670,16 +720,20 @@ export async function finalizeOnboardingAction(input: FinalizeInput): Promise<Fi
   const supabase = serviceClient();
 
   // Backfill primary_email from the finalize form if the user skipped the
-  // practice-step email field. The draft cookie's phone is authoritative.
+  // practice-step email field.
   const primaryEmail = draft.primary_email ?? parsed.data.email;
 
-  // 1. Create auth user.
+  // The auth user's phone: the OTP-verified phone (phone channel) or the draft's
+  // phone, if any. Email-onboarded clinics may have no phone — omit it then.
+  const authPhone =
+    loaded.claim.channel === "phone" ? loaded.claim.contact : (draft.phone_e164 ?? undefined);
+
+  // 1. Create auth user. The login is always email + password.
   const { data: created, error: cuErr } = await supabase.auth.admin.createUser({
     email:         parsed.data.email,
     password:      parsed.data.password,
-    phone:         loaded.claim.phone,
     email_confirm: true,
-    phone_confirm: true,
+    ...(authPhone ? { phone: authPhone, phone_confirm: true } : {}),
     user_metadata: { onboarding_draft_id: draft.id },
   });
   if (cuErr || !created.user) {

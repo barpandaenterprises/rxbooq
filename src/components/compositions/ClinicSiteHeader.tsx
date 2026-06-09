@@ -4,8 +4,9 @@ type Props = {
   clinicName:  string;
   clinicSlug:  string;
   /** When true, the page is being rendered on the tenant subdomain root or
-   *  custom domain — the booking link can be the plain "/book". Otherwise we
-   *  thread the clinic slug as ?clinic= so /d/{slug} works on the apex. */
+   *  custom domain — the booking link can be the plain "/book" (host resolves
+   *  the tenant). Otherwise use the path form "/{slug}/book", which resolves on
+   *  any host. The "?clinic=" form is dev-only and breaks in production. */
   isTenantRoot?: boolean;
 };
 
@@ -17,7 +18,7 @@ const NAV_ITEMS = [
 ];
 
 export function ClinicSiteHeader({ clinicName, clinicSlug, isTenantRoot }: Props) {
-  const bookHref = isTenantRoot ? "/book" : `/book?clinic=${clinicSlug}`;
+  const bookHref = isTenantRoot ? "/book" : `/${clinicSlug}/book`;
 
   return (
     <nav className="sticky top-0 z-30 flex h-16 items-center border-b border-border bg-white md:h-[72px]">

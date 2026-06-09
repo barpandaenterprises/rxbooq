@@ -15,9 +15,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export const COOKIE_NAME    = "onboarding_draft";
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days — matches a reasonable drop-off window
 
+export type OnboardingChannel = "phone" | "email";
+
 export type DraftClaim = {
   draftId:  string;
-  phone:    string;
+  /** The channel + verified contact (phone E.164 or email) that owns this draft. */
+  channel:  OnboardingChannel;
+  contact:  string;
   issuedAt: number;
 };
 
@@ -59,10 +63,21 @@ export function verifyDraftCookie(value: string | undefined): DraftClaim | null 
   if (!timingSafeEqual(provided, expected)) return null;
 
   try {
-    const claim = JSON.parse(fromBase64url(payload).toString("utf8")) as DraftClaim;
-    if (typeof claim.draftId !== "string" || typeof claim.phone !== "string") return null;
-    if (Date.now() - claim.issuedAt > COOKIE_MAX_AGE * 1000) return null;
-    return claim;
+    const raw = JSON.parse(fromBase64url(payload).toString("utf8")) as
+      Partial<DraftClaim> & { phone?: string };
+    if (typeof raw.draftId !== "string") return null;
+    if (typeof raw.issuedAt !== "number") return null;
+    if (Date.now() - raw.issuedAt > COOKIE_MAX_AGE * 1000) return null;
+
+    // Back-compat: legacy cookies carried only { draftId, phone } — map to the
+    // generalized phone channel so in-flight drafts keep working.
+    if (typeof raw.contact === "string" && (raw.channel === "phone" || raw.channel === "email")) {
+      return { draftId: raw.draftId, channel: raw.channel, contact: raw.contact, issuedAt: raw.issuedAt };
+    }
+    if (typeof raw.phone === "string") {
+      return { draftId: raw.draftId, channel: "phone", contact: raw.phone, issuedAt: raw.issuedAt };
+    }
+    return null;
   } catch {
     return null;
   }
