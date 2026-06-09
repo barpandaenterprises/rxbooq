@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { PasswordInput } from "@/components/molecules/PasswordInput";
 import { signInWithPassword } from "./actions";
 
 const loginSchema = z.object({
@@ -77,9 +78,8 @@ export function LoginForm({ initialError, next }: { initialError?: string; next?
         <label htmlFor="password" className="block text-small font-medium text-body">
           Password
         </label>
-        <input
+        <PasswordInput
           id="password"
-          type="password"
           autoComplete="current-password"
           {...register("password")}
           className={inputCls(!!errors.password)}

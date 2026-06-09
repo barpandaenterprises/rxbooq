@@ -4,11 +4,13 @@ type Props = {
 };
 
 const STEPS: { key: string; label: string }[] = [
-  { key: "phone",    label: "Phone" },
+  { key: "phone",    label: "Email" },
   { key: "profile",  label: "Profile" },
   { key: "practice", label: "Practice" },
   { key: "docs",     label: "Documents" },
-  { key: "plan",     label: "Plan" },
+  // Plan step removed for now — clinics start on the Free Listing plan and can
+  // upgrade later from /admin/settings/billing. Re-add { key: "plan", … } here
+  // and restore the PlanPickerStep wiring to bring it back.
   { key: "account",  label: "Account" },
 ];
 

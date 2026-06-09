@@ -14,7 +14,17 @@ type Draft = {
   doctor_languages:         string[] | null;
 };
 
-const LANGUAGES = ["en", "hi", "or", "ta", "te", "bn", "kn", "ml"];
+const LANGUAGES: { code: string; name: string }[] = [
+  { code: "en",    name: "English" },
+  { code: "hi",    name: "Hindi" },
+  { code: "or",    name: "Odia" },
+  { code: "ta",    name: "Tamil" },
+  { code: "te",    name: "Telugu" },
+  { code: "bn",    name: "Bengali" },
+  { code: "kn",    name: "Kannada" },
+  { code: "ml",    name: "Malayalam" },
+  { code: "other", name: "Other" },
+];
 
 export function ProfileStep({ draft, draftId }: { draft: Draft; draftId: string }) {
   const router = useRouter();
@@ -81,21 +91,26 @@ export function ProfileStep({ draft, draftId }: { draft: Draft; draftId: string 
       </div>
 
       <div className="mt-2 mb-4">
-        <label className="mb-1.5 block text-[13px] font-medium text-heading">Languages you consult in</label>
+        <label className="mb-1.5 block text-[13px] font-medium text-heading">
+          Languages you consult in
+        </label>
+        <p className="mb-2 text-[12px] text-[#9aa9b8]">Select all that apply.</p>
         <div className="flex flex-wrap gap-2">
           {LANGUAGES.map((l) => (
             <button
-              key={l}
+              key={l.code}
               type="button"
-              onClick={() => toggleLang(l)}
+              aria-pressed={langs.includes(l.code)}
+              onClick={() => toggleLang(l.code)}
               className={
-                "rounded-pill border px-3 py-1 text-[12px] uppercase tracking-wide " +
-                (langs.includes(l)
+                "inline-flex items-center gap-1.5 rounded-pill border px-3.5 py-1.5 text-[13px] " +
+                (langs.includes(l.code)
                   ? "border-cta bg-cta text-cta-fg"
                   : "border-border bg-white text-muted hover:text-heading")
               }
             >
-              {l}
+              {langs.includes(l.code) && <i className="fas fa-check text-[10px]" />}
+              {l.name}
             </button>
           ))}
         </div>

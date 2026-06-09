@@ -58,7 +58,7 @@ export function DocsUploadStep({ draft, draftId }: { draft: Draft; draftId: stri
   const next = () => {
     startTransition(async () => {
       await saveOnboardingStepAction({ last_step_completed: "docs" });
-      router.push(`/get-started/${draftId}?step=plan`);
+      router.push(`/get-started/${draftId}?step=account`);
     });
   };
 

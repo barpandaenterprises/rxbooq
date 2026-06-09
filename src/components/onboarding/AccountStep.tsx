@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { FormField, TEXT_INPUT_CLASS } from "@/components/molecules/FormField";
+import { PasswordInput } from "@/components/molecules/PasswordInput";
 import { finalizeOnboardingAction } from "@/app/(onboarding)/get-started/actions";
 
 type Draft = {
@@ -45,7 +46,7 @@ export function AccountStep({ draft }: { draft: Draft }) {
         <input className={TEXT_INPUT_CLASS} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@yourclinic.in" />
       </FormField>
       <FormField label="Password" required hint="At least 8 characters">
-        <input className={TEXT_INPUT_CLASS} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+        <PasswordInput className={TEXT_INPUT_CLASS} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
       </FormField>
 
       <label className="mt-2 flex cursor-pointer items-start gap-2 text-[13px] text-body">

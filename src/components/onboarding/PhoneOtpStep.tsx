@@ -19,7 +19,8 @@ function stepFromLast(last: string | null): string {
   switch (last) {
     case "profile":  return "practice";
     case "practice": return "docs";
-    case "docs":     return "plan";
+    case "docs":     return "account";
+    // "plan" is no longer a step — legacy drafts that stopped there resume at account.
     case "plan":     return "account";
     case "account":  return "account";
     case "phone":
@@ -29,7 +30,10 @@ function stepFromLast(last: string | null): string {
 
 export function PhoneOtpStep({ mode = "start" }: Props) {
   const router = useRouter();
-  const [channel, setChannel]   = useState<Channel>("phone");
+  // Mobile-number OTP is intentionally not exposed in the UI yet — we ship
+  // email-only validation for now. The phone channel + switchChannel logic is
+  // kept below so we can re-enable the toggle by restoring the JSX block.
+  const [channel, setChannel]   = useState<Channel>("email");
   const [phone, setPhone]       = useState("+91");
   const [email, setEmail]       = useState("");
   const [otpSent, setOtpSent]   = useState(false);
@@ -41,6 +45,9 @@ export function PhoneOtpStep({ mode = "start" }: Props) {
 
   const contact = channel === "phone" ? phone.trim() : email.trim();
 
+  // Used by the (currently hidden) channel toggle — kept for when mobile-number
+  // OTP is re-enabled.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const switchChannel = (next: Channel) => {
     if (next === channel) return;
     setChannel(next);
@@ -90,8 +97,8 @@ export function PhoneOtpStep({ mode = "start" }: Props) {
       </h1>
       <p className="mb-6 text-[14px] text-muted">
         {mode === "resume"
-          ? "Enter the mobile number or email you started with. We'll send a code to pick up where you left off."
-          : "Start with your mobile number or email. We'll save your progress as you go — you can come back anytime."}
+          ? "Enter the email you started with. We'll send a code to pick up where you left off."
+          : "Start with your email. We'll save your progress as you go — you can come back anytime."}
       </p>
 
       {error && (
@@ -114,23 +121,8 @@ export function PhoneOtpStep({ mode = "start" }: Props) {
 
       {!otpSent ? (
         <>
-          {/* Channel toggle */}
-          <div className="mb-4 inline-flex rounded-md border border-border p-0.5 text-[13px]">
-            {(["phone", "email"] as Channel[]).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => switchChannel(c)}
-                className={
-                  "rounded-[6px] px-4 py-1.5 font-medium transition-colors " +
-                  (channel === c ? "bg-cta text-cta-fg" : "text-muted hover:text-heading")
-                }
-              >
-                <i className={`fas ${c === "phone" ? "fa-mobile-screen-button" : "fa-envelope"} mr-1.5 text-[11px]`} />
-                {c === "phone" ? "Mobile number" : "Email"}
-              </button>
-            ))}
-          </div>
+          {/* Channel toggle hidden for now — email-only OTP. Restore this block
+              (the phone/email switcher) to bring mobile-number OTP back. */}
 
           {channel === "phone" ? (
             <FormField label="Mobile number" htmlFor="phone" required hint="Use country code, e.g. +919999900001">

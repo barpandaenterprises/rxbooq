@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
-import { createDoctorLoginAction, updateDoctorAction } from "@/app/(clinic-app)/[clinicSlug]/admin/doctors/actions";
+import { createDoctorLoginAction, resendDoctorLoginAction, updateDoctorAction } from "@/app/(clinic-app)/[clinicSlug]/admin/doctors/actions";
 import { DoctorPhotoField, fileToDataUrl } from "@/components/molecules/DoctorPhotoField";
 import type { Department } from "@/lib/data/departments";
 import {
@@ -97,9 +97,24 @@ export function EditDoctorDialog({ trigger, doctor, departments = [], open: cont
   const [photoRemoved, setPhotoRemoved] = useState(false);
 
   // Login / access — invite an email and link it to this doctor profile.
-  const [loginEmail, setLoginEmail] = useState(doctor.email ?? "");
+  const hasLogin = !!doctor.login;
+  const [loginEmail, setLoginEmail] = useState(doctor.login?.email ?? doctor.email ?? "");
   const [loginMsg, setLoginMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [isCreatingLogin, startCreateLogin] = useTransition();
+  const [isResending, startResend] = useTransition();
+
+  const onResendLogin = () => {
+    if (isResending) return;
+    setLoginMsg(null);
+    startResend(async () => {
+      const result = await resendDoctorLoginAction({ doctorId: doctor.id });
+      if (!result.ok) {
+        setLoginMsg({ kind: "err", text: result.error });
+        return;
+      }
+      setLoginMsg({ kind: "ok", text: `Sent a set-password link to ${result.email}.` });
+    });
+  };
 
   const onCreateLogin = () => {
     if (isCreatingLogin) return;
@@ -119,7 +134,12 @@ export function EditDoctorDialog({ trigger, doctor, departments = [], open: cont
         setLoginMsg({ kind: "err", text: result.error });
         return;
       }
-      setLoginMsg({ kind: "ok", text: `Invite sent to ${email}. They can sign in once they set a password.` });
+      setLoginMsg({
+        kind: "ok",
+        text: result.alreadyHadLogin
+          ? `Linked this profile to the existing login for ${email}.`
+          : `Invite sent to ${email}. They can sign in once they set a password.`,
+      });
       router.refresh();
     });
   };
@@ -431,41 +451,75 @@ export function EditDoctorDialog({ trigger, doctor, departments = [], open: cont
               </Section>
 
               <Section label="Login & access">
-                <p className="-mt-1 mb-1 text-[12px] text-muted">
-                  Give this doctor a login. They&rsquo;ll only see their own appointments and assigned patients.
-                  We email a one-time link to set a password.
-                </p>
-                <Field label="Email for login">
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                      type="email"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      placeholder="doctor@clinic.in"
-                      className={inputCls(false)}
-                    />
-                    <button
-                      type="button"
-                      onClick={onCreateLogin}
-                      disabled={isCreatingLogin}
-                      className={
-                        "inline-flex flex-none cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-[13px] font-semibold text-heading hover:border-link-hover " +
-                        (isCreatingLogin ? "cursor-not-allowed opacity-60" : "")
-                      }
-                    >
-                      {isCreatingLogin ? (
-                        <><i className="fas fa-spinner fa-spin text-[12px]" /> Sending…</>
-                      ) : (
-                        <><i className="fas fa-user-plus text-[12px]" /> Create login</>
-                      )}
-                    </button>
-                  </div>
-                  {loginMsg && (
-                    <p className={"mt-1.5 text-[12px] " + (loginMsg.kind === "ok" ? "text-[#1f5e3a]" : "text-danger")}>
-                      {loginMsg.text}
+                {hasLogin ? (
+                  <>
+                    <div className="flex items-start gap-2.5 rounded-md border border-[#cce4d6] bg-[#f1faf4] px-3 py-2.5">
+                      <i className="fas fa-circle-check mt-0.5 text-[14px] text-[#1f7a3a]" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-medium text-heading">Login active</p>
+                        <p className="truncate text-[12px] text-muted">
+                          {doctor.login?.email ?? "—"} — signs in and sees only their own appointments and assigned patients.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={onResendLogin}
+                        disabled={isResending}
+                        className={
+                          "inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-white px-3.5 py-2 text-[12px] font-semibold text-heading hover:border-link-hover " +
+                          (isResending ? "cursor-not-allowed opacity-60" : "")
+                        }
+                      >
+                        {isResending ? (
+                          <><i className="fas fa-spinner fa-spin text-[11px]" /> Sending…</>
+                        ) : (
+                          <><i className="fas fa-paper-plane text-[11px]" /> Resend set-password link</>
+                        )}
+                      </button>
+                      <span className="text-[11px] text-muted">Manage access from Settings → Team.</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="-mt-1 mb-1 text-[12px] text-muted">
+                      Give this doctor a login. They&rsquo;ll only see their own appointments and assigned patients.
+                      We email a one-time link to set a password.
                     </p>
-                  )}
-                </Field>
+                    <Field label="Email for login">
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
+                          type="email"
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          placeholder="doctor@clinic.in"
+                          className={inputCls(false)}
+                        />
+                        <button
+                          type="button"
+                          onClick={onCreateLogin}
+                          disabled={isCreatingLogin}
+                          className={
+                            "inline-flex flex-none cursor-pointer items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-[13px] font-semibold text-heading hover:border-link-hover " +
+                            (isCreatingLogin ? "cursor-not-allowed opacity-60" : "")
+                          }
+                        >
+                          {isCreatingLogin ? (
+                            <><i className="fas fa-spinner fa-spin text-[12px]" /> Sending…</>
+                          ) : (
+                            <><i className="fas fa-user-plus text-[12px]" /> Create login</>
+                          )}
+                        </button>
+                      </div>
+                    </Field>
+                  </>
+                )}
+                {loginMsg && (
+                  <p className={"mt-1.5 text-[12px] " + (loginMsg.kind === "ok" ? "text-[#1f5e3a]" : "text-danger")}>
+                    {loginMsg.text}
+                  </p>
+                )}
               </Section>
             </div>
 

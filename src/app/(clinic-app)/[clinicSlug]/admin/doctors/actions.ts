@@ -491,7 +491,7 @@ export type CreateDoctorLoginInput = z.infer<typeof createLoginSchema>;
 
 export async function createDoctorLoginAction(
   rawInput: CreateDoctorLoginInput,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; alreadyHadLogin: boolean } | { ok: false; error: string }> {
   const parsed = createLoginSchema.safeParse(rawInput);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -529,6 +529,40 @@ export async function createDoctorLoginAction(
     return { ok: false, error: inviteErr?.message ?? "Failed to invite user." };
   }
 
+  // Is this auth user already a member of this clinic? This is common when the
+  // founder/admin uses their own email as a doctor's login — they already have
+  // a clinic_users row, so a plain insert would trip the (clinic_id,
+  // auth_user_id) unique constraint. In that case just link the doctor profile
+  // onto their existing row (keeping their current role — don't demote an admin).
+  const { data: existingMember } = await admin
+    .from("clinic_users")
+    .select("id, doctor_id")
+    .eq("clinic_id", gate.ctx.clinicId)
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+
+  if (existingMember) {
+    if (existingMember.doctor_id && existingMember.doctor_id !== input.doctorId) {
+      return { ok: false, error: "This login is already linked to a different doctor profile." };
+    }
+    if (existingMember.doctor_id !== input.doctorId) {
+      const { error: updErr } = await admin
+        .from("clinic_users")
+        .update({ doctor_id: input.doctorId })
+        .eq("id", existingMember.id)
+        .eq("clinic_id", gate.ctx.clinicId);
+      if (updErr) {
+        if ((updErr as { code?: string }).code === "23505") {
+          return { ok: false, error: "That doctor profile already has a login linked." };
+        }
+        return { ok: false, error: updErr.message };
+      }
+    }
+    await revalidateActiveClinicPath("/admin/doctors");
+    await revalidateActiveClinicPath("/admin/settings/team");
+    return { ok: true, alreadyHadLogin: true };
+  }
+
   const linked = await linkAuthUserToClinic({
     authUserId,
     email:       input.email,
@@ -542,5 +576,49 @@ export async function createDoctorLoginAction(
 
   await revalidateActiveClinicPath("/admin/doctors");
   await revalidateActiveClinicPath("/admin/settings/team");
-  return { ok: true };
+  return { ok: true, alreadyHadLogin: false };
+}
+
+// =============================================================================
+// Resend the set-password / sign-in link for a doctor whose login already
+// exists. Emails a password-reset link via Supabase Auth (the same channel
+// used for the original invite). Admins only.
+// =============================================================================
+
+const resendLoginSchema = z.object({
+  doctorId: z.string().uuid(),
+});
+
+export async function resendDoctorLoginAction(
+  rawInput: z.infer<typeof resendLoginSchema>,
+): Promise<{ ok: true; email: string } | { ok: false; error: string }> {
+  const parsed = resendLoginSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  }
+
+  const gate = await requireClinicAdmin();
+  if (!gate.ok) return gate;
+
+  const admin = serviceClient();
+
+  // Find the doctor-role login linked to this profile, scoped to the clinic.
+  const { data: link } = await admin
+    .from("clinic_users")
+    .select("email")
+    .eq("clinic_id", gate.ctx.clinicId)
+    .eq("role", "doctor")
+    .eq("doctor_id", parsed.data.doctorId)
+    .maybeSingle();
+  if (!link?.email) {
+    return { ok: false, error: "No login is linked to this doctor yet." };
+  }
+
+  // resetPasswordForEmail emails a link the doctor can use to set/reset their
+  // password — works whether or not they completed the original invite.
+  const supabase = await serverClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(link.email);
+  if (error) return { ok: false, error: error.message };
+
+  return { ok: true, email: link.email };
 }

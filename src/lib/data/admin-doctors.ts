@@ -146,7 +146,7 @@ async function getLiveDoctors(): Promise<Doctor[]> {
   if (!clinicId) return [];
 
   const supabase = await serverClient();
-  const [{ data: docRows, error: dErr }, { data: availRows }] = await Promise.all([
+  const [{ data: docRows, error: dErr }, { data: availRows }, { data: loginRows }] = await Promise.all([
     supabase
       .from("doctors")
       .select(
@@ -158,6 +158,15 @@ async function getLiveDoctors(): Promise<Doctor[]> {
       .from("doctor_availability")
       .select("doctor_id, weekday, start_time, end_time")
       .eq("clinic_id", clinicId),
+    // Logins linked to a doctor profile — drives the "login already created"
+    // state on the edit dialog so we don't prompt to create one twice. Not
+    // filtered by role: a founder/admin can also be linked to a doctor profile
+    // (same person), in which case their row is role='clinic_admin'.
+    supabase
+      .from("clinic_users")
+      .select("doctor_id, email")
+      .eq("clinic_id", clinicId)
+      .not("doctor_id", "is", null),
   ]);
 
   if (dErr) {
@@ -166,6 +175,11 @@ async function getLiveDoctors(): Promise<Doctor[]> {
   }
 
   const scheduleByDoctor = buildScheduleByDoctor((availRows ?? []) as AvailabilityRow[]);
+
+  const loginByDoctor = new Map<string, string | null>();
+  for (const r of (loginRows ?? []) as Array<{ doctor_id: string | null; email: string | null }>) {
+    if (r.doctor_id) loginByDoctor.set(r.doctor_id, r.email ?? null);
+  }
 
   return (docRows ?? []).map((r: DoctorRow): Doctor => {
     const palette = avatarFor(r.id);
@@ -201,6 +215,9 @@ async function getLiveDoctors(): Promise<Doctor[]> {
       },
       reviews: [],
       departmentId:        r.department_id,
+      login:               loginByDoctor.has(r.id)
+                             ? { email: loginByDoctor.get(r.id) ?? null }
+                             : null,
     };
   });
 }

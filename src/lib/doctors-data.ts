@@ -94,6 +94,12 @@ export type Doctor = {
   reviews: Review[];
   /** FK to public.departments (added in migration 0010). Null = unassigned. */
   departmentId?: string | null;
+  /**
+   * Linked staff login, if one has been created for this doctor (a
+   * clinic_users row with role='doctor' + doctor_id = this profile).
+   * Null/undefined = no login yet → show the "Create login" flow.
+   */
+  login?: { email: string | null } | null;
 };
 
 // ---------- Mock catalog ----------

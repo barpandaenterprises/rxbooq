@@ -446,25 +446,25 @@ async function pickAvailableSuggestion(base: string, cityHint?: string): Promise
 
 const stepDataSchema = z.object({
   // Profile step
-  doctor_full_name:         z.string().trim().min(2).max(120).optional(),
-  doctor_qualifications:    z.string().trim().max(200).optional(),
-  doctor_registration_no:   z.string().trim().min(2).max(60).optional(),
-  doctor_primary_specialty: z.string().trim().max(80).optional(),
-  doctor_years_experience:  z.number().int().min(0).max(80).optional(),
-  doctor_languages:         z.array(z.string().min(2).max(8)).max(8).optional(),
+  doctor_full_name:         z.string().trim().min(2, "Enter your full name.").max(120, "Name is too long.").optional(),
+  doctor_qualifications:    z.string().trim().max(200, "Qualifications are too long.").optional(),
+  doctor_registration_no:   z.string().trim().min(2, "Enter your registration number.").max(60, "Registration number is too long.").optional(),
+  doctor_primary_specialty: z.string().trim().max(80, "Specialty is too long.").optional(),
+  doctor_years_experience:  z.number().int().min(0).max(80, "Enter a realistic number of years.").optional(),
+  doctor_languages:         z.array(z.string().min(2).max(8)).max(15).optional(),
 
   // Practice step
-  clinic_name:    z.string().trim().min(2).max(120).optional(),
-  suggested_slug: z.string().trim().min(2).max(60)
-                    .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, "Lowercase letters, digits, hyphens")
+  clinic_name:    z.string().trim().min(2, "Clinic name must be at least 2 characters.").max(120, "Clinic name is too long.").optional(),
+  suggested_slug: z.string().trim().min(2, "URL slug must be at least 2 characters.").max(60, "URL slug is too long.")
+                    .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, "Use lowercase letters, digits, and hyphens.")
                     .optional(),
-  address:        z.string().trim().min(5).max(200).optional(),
-  city:           z.string().trim().min(2).max(80).optional(),
-  state:          z.string().trim().min(2).max(80).optional(),
-  pincode:        z.string().trim().regex(/^[0-9]{6}$/, "6-digit pincode").optional(),
-  primary_phone:  z.string().trim().regex(/^\+[1-9][0-9]{6,14}$/).optional(),
-  primary_email:  z.string().trim().email().optional(),
-  pitch:          z.string().trim().max(800).optional(),
+  address:        z.string().trim().min(5, "Street address must be at least 5 characters.").max(200, "Address is too long.").optional(),
+  city:           z.string().trim().min(2, "Select or enter your city.").max(80, "City name is too long.").optional(),
+  state:          z.string().trim().min(2, "Select your state.").max(80, "State name is too long.").optional(),
+  pincode:        z.string().trim().regex(/^[0-9]{6}$/, "Enter a valid 6-digit pincode.").optional(),
+  primary_phone:  z.string().trim().regex(/^\+[1-9][0-9]{6,14}$/, "Enter a valid phone number.").optional(),
+  primary_email:  z.string().trim().email("Enter a valid email address.").optional(),
+  pitch:          z.string().trim().max(800, "Pitch is too long (max 800 characters).").optional(),
 
   // Plan step
   selected_plan_id:       z.string().uuid().optional(),
@@ -477,12 +477,24 @@ const stepDataSchema = z.object({
 
 export type SaveStepInput = z.infer<typeof stepDataSchema>;
 
-export type SaveStepResult = { ok: true } | { ok: false; error: string };
+export type SaveStepResult =
+  | { ok: true }
+  | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 export async function saveOnboardingStepAction(input: SaveStepInput): Promise<SaveStepResult> {
   const parsed = stepDataSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    // Map each issue to its field so the UI can render it under the right input.
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = String(issue.path[0] ?? "");
+      if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+      fieldErrors,
+    };
   }
 
   const loaded = await loadDraftFromCookie();
@@ -498,12 +510,10 @@ export async function saveOnboardingStepAction(input: SaveStepInput): Promise<Sa
       parsed.data.city ?? loaded.draft.city ?? undefined,
     );
     if (check.ok && !check.available) {
-      return {
-        ok:    false,
-        error: check.suggestion
-          ? `${check.reason} Try "${check.suggestion}".`
-          : check.reason,
-      };
+      const slugMsg = check.suggestion
+        ? `${check.reason} Try "${check.suggestion}".`
+        : check.reason;
+      return { ok: false, error: slugMsg, fieldErrors: { suggested_slug: slugMsg } };
     }
   }
 
@@ -710,7 +720,8 @@ export async function finalizeOnboardingAction(input: FinalizeInput): Promise<Fi
     ["primary_phone", draft.primary_phone],
     ["doctor_full_name", draft.doctor_full_name],
     ["doctor_registration_no", draft.doctor_registration_no],
-    ["selected_plan_id", draft.selected_plan_id],
+    // selected_plan_id is no longer collected in the wizard — we default new
+    // clinics to the Free Listing plan below before activation.
   ] as const;
   const missing = required.find(([, v]) => !v);
   if (missing) {
@@ -718,6 +729,24 @@ export async function finalizeOnboardingAction(input: FinalizeInput): Promise<Fi
   }
 
   const supabase = serviceClient();
+
+  // Default plan: the wizard no longer has a plan-picker step, so every new
+  // clinic starts on Free Listing (code='free'). They can upgrade later from
+  // /admin/settings/billing. Resolve it up-front so we fail before creating an
+  // auth user if the plan catalog is somehow missing the free tier.
+  let planId = draft.selected_plan_id;
+  if (!planId) {
+    const { data: freePlan } = await supabase
+      .from("subscription_plans")
+      .select("id")
+      .eq("code", "free")
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!freePlan) {
+      return { ok: false, error: "No starter plan is available. Please contact support." };
+    }
+    planId = freePlan.id;
+  }
 
   // Backfill primary_email from the finalize form if the user skipped the
   // practice-step email field.
@@ -745,12 +774,14 @@ export async function finalizeOnboardingAction(input: FinalizeInput): Promise<Fi
     };
   }
 
-  // 2. Stamp the draft (auth_user_id + email backfill).
+  // 2. Stamp the draft (auth_user_id + email backfill + default plan). The
+  //    activation RPC reads selected_plan_id off the draft, so set it here.
   const { error: stampErr } = await supabase
     .from("clinic_applications")
     .update({
-      auth_user_id:  created.user.id,
-      primary_email: primaryEmail,
+      auth_user_id:     created.user.id,
+      primary_email:    primaryEmail,
+      selected_plan_id: planId,
     })
     .eq("id", draft.id);
   if (stampErr) {
