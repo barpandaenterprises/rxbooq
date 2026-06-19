@@ -53,7 +53,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <div className="relative">
           <div className="flex items-center gap-3">
             <span className="grid h-11 w-11 place-items-center rounded-md bg-white/15 text-[20px] ring-1 ring-white/20 backdrop-blur">
-              <i className="fas fa-tooth" />
+              <i className="fas fa-stethoscope" />
             </span>
             <div className="leading-tight">
               <div className="text-[18px] font-semibold">{clinicName}</div>
@@ -68,7 +68,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         <div className="relative max-w-md">
           <h2 className="text-[40px] font-semibold leading-[48px]">
-            Better dental care, less paperwork.
+            Better care, less paperwork.
           </h2>
           <p className="mt-4 text-[16px] leading-7 text-white/75">
             {tagline}
@@ -97,7 +97,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           {/* Mobile-only brand bar */}
           <div className="mb-8 flex items-center justify-center gap-2.5 lg:hidden">
             <span className="grid h-10 w-10 place-items-center rounded-md bg-brand text-[18px] text-brand-fg">
-              <i className="fas fa-tooth" />
+              <i className="fas fa-stethoscope" />
             </span>
             <div className="text-[16px] font-semibold text-heading">{clinicName}</div>
           </div>

@@ -35,15 +35,17 @@ export function LoginForm({ initialError, next }: { initialError?: string; next?
     fd.set("password", values.password);
     if (next) fd.set("next", next);
     startTransition(() => {
-      // The server action *always* calls redirect() — to /admin/today on success
-      // or back to /login?error=... on failure. redirect() throws a special
-      // NEXT_REDIRECT "error" that the framework catches to perform the actual
-      // navigation. We must let that one propagate; only surface real errors
-      // (e.g. unexpected network failure).
-      signInWithPassword(fd).catch((err: unknown) => {
-        if (isNextRedirectError(err)) throw err;
-        setServerError(err instanceof Error ? err.message : "Sign-in failed");
-      });
+      // On success the server action calls redirect(), which throws a special
+      // NEXT_REDIRECT "error" the framework catches to navigate — we must let
+      // that propagate. On failure it RETURNS { error }, which we render inline.
+      signInWithPassword(fd)
+        .then((res) => {
+          if (res && "error" in res && res.error) setServerError(res.error);
+        })
+        .catch((err: unknown) => {
+          if (isNextRedirectError(err)) throw err;
+          setServerError(err instanceof Error ? err.message : "Sign-in failed");
+        });
     });
   };
 

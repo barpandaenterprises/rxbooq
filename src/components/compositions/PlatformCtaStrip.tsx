@@ -9,7 +9,7 @@ export function PlatformCtaStrip() {
             List your clinic in 5 minutes.
           </h2>
           <p className="mt-2 text-[14px] leading-[22px] text-white/85 md:text-[16px] md:leading-[26px]">
-            Phone OTP, fill your profile, go live. Free public listing, paid features when you need them.
+            Email OTP, fill your profile, go live. Free public listing, paid features when you need them.
           </p>
         </div>
 

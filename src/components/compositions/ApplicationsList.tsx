@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { DraftRowActions } from "@/components/compositions/DraftRowActions";
 
 export type DraftRow = {
   id:                       string;
@@ -302,6 +303,17 @@ function DraftCard({ draft, open, onToggle }: { draft: DraftRow; open: boolean; 
                 <i className="fas fa-envelope mr-1.5 text-[10px] text-muted" /> Email
               </a>
             )}
+            <span className="mx-1 h-5 w-px bg-border" />
+            <DraftRowActions
+              draftId={draft.id}
+              label={
+                draft.clinic_name
+                  ?? draft.doctor_full_name
+                  ?? draft.primary_email
+                  ?? draft.phone_e164
+                  ?? "Unnamed draft"
+              }
+            />
             <span className="ml-auto font-mono text-[10px] text-[#9aa9b8]">{draft.id}</span>
           </div>
         </div>

@@ -67,13 +67,13 @@ export function SuperAdminTopBar() {
         >
           <i className="fas fa-life-ring text-[11px]" /> Help
         </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-md bg-cta px-4 py-2 text-[14px] font-medium text-cta-fg hover:bg-[#d92843]"
+        <Link
+          href="/superadmin/clinics/new"
+          className="inline-flex items-center gap-2 rounded-md bg-cta px-4 py-2 text-[14px] font-medium text-cta-fg no-underline hover:bg-[#d92843]"
         >
           <i className="fas fa-plus" />
           <span className="hidden md:inline">Onboard clinic</span>
-        </button>
+        </Link>
         <span className="grid h-8 w-8 place-items-center rounded-pill bg-white text-[12px] font-semibold text-brand">
           RA
         </span>

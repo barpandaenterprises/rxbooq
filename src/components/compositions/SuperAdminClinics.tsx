@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { serviceClient } from "@/lib/supabase/server";
 import { formatInr } from "@/lib/billing/pricing";
+import { ClinicRowActions } from "@/components/compositions/ClinicRowActions";
 
 /**
  * Cross-tenant clinic overview for superadmins. All numbers come from the live
@@ -328,7 +328,7 @@ function ClinicTable({
               <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.06em]">MRR</th>
               <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.06em]">Patients</th>
               <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.06em]">Joined</th>
-              <th className="px-3 py-3 pr-4 text-right text-[11px] font-semibold uppercase tracking-[0.06em]">View</th>
+              <th className="px-3 py-3 pr-4 text-right text-[11px] font-semibold uppercase tracking-[0.06em]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -403,9 +403,7 @@ function PlanGroup({ group }: { group: { label: string; code: string; rows: Clin
             <td className="px-3 py-3 text-right text-[13px] text-heading">{c.patient_count.toLocaleString("en-IN")}</td>
             <td className="px-3 py-3 text-[12px] text-muted">{new Date(c.created_at).toLocaleDateString("en-IN")}</td>
             <td className="px-3 py-3 pr-4 text-right">
-              <Link href={`/${c.slug}`} target="_blank" rel="noopener noreferrer" className="text-[12px] text-link-hover no-underline" title="Open public profile">
-                <i className="fas fa-external-link-alt text-[11px]" />
-              </Link>
+              <ClinicRowActions clinicId={c.id} slug={c.slug} name={c.name} />
             </td>
           </tr>
         );

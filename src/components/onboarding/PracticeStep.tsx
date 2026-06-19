@@ -323,14 +323,11 @@ export function PracticeStep({ draft, draftId }: { draft: Draft; draftId: string
           hint={fieldErrors.primary_phone ? undefined : "Shown on your public profile"}
         >
           <div className="flex gap-2">
+            <span className="grid w-[60px] shrink-0 place-items-center rounded-md border-[1.5px] border-border bg-surface-muted text-[15px] text-muted">
+              +91
+            </span>
             <input
-              className={TEXT_INPUT_CLASS + " w-[68px] shrink-0 text-center"}
-              value="+91"
-              disabled
-              aria-label="Country code"
-            />
-            <input
-              className={TEXT_INPUT_CLASS + " flex-1"}
+              className={TEXT_INPUT_CLASS}
               type="tel"
               inputMode="numeric"
               maxLength={10}

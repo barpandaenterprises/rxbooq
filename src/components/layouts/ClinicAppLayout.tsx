@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/current-user";
 import { getActiveClinicSlug } from "@/lib/routing/active-slug";
 import { getBookingLookups, type BookingLookups } from "@/lib/data/booking-lookups";
+import { getAdminSidebarBadges, type SidebarBadges } from "@/lib/data/admin-sidebar";
 import { serviceClient } from "@/lib/supabase/server";
 
 type ClinicHeader = { name: string; city: string | null };
@@ -45,23 +46,26 @@ export type AdminNavKey =
 
 type StaffRole = "clinic_admin" | "doctor" | "receptionist";
 
+type BadgeKey = "today" | "messages";
+
 type NavSpec = {
   ic: string;
   label: AdminNavKey;
   /** Path under /[slug]/admin (e.g. "/today"). Bare "#" if not wired yet. */
   path: string;
-  badge?: string;
+  /** Which live count (if any) drives this item's badge. */
+  badgeKey?: BadgeKey;
   badgeCoral?: boolean;
   /** If set, only these roles see the item (superadmin always does). */
   roles?: StaffRole[];
 };
 
 const NAV_ITEMS: NavSpec[] = [
-  { ic: "fa-calendar-day", label: "Today",     path: "/today",            badge: "12" },
+  { ic: "fa-calendar-day", label: "Today",     path: "/today",            badgeKey: "today" },
   { ic: "fa-calendar-alt", label: "Calendar",  path: "/calendar" },
   { ic: "fa-users",        label: "Patients",  path: "/patients" },
   { ic: "fa-user-md",      label: "Doctors",   path: "/doctors" },
-  { ic: "fa-comments",     label: "Messages",  path: "/messages",         badge: "3", badgeCoral: true },
+  { ic: "fa-comments",     label: "Messages",  path: "/messages",         badgeKey: "messages", badgeCoral: true },
   { ic: "fa-chart-line",   label: "Analytics", path: "/analytics" },
   { ic: "fa-file-alt",     label: "Content",   path: "#" },
   // Clinic configuration is admin-only; doctors and receptionists don't see it.
@@ -75,13 +79,13 @@ function navVisibleFor(item: NavSpec, role: StaffRole | "superadmin" | null): bo
   return role !== null && item.roles.includes(role as StaffRole);
 }
 
-type MobileTabSpec = { ic: string; label: string; path?: string; key: AdminNavKey | "More"; badge?: number };
+type MobileTabSpec = { ic: string; label: string; path?: string; key: AdminNavKey | "More"; badgeKey?: BadgeKey };
 
 const MOBILE_TABS: MobileTabSpec[] = [
   { ic: "fa-calendar-day", label: "Today",    path: "/today",    key: "Today" },
   { ic: "fa-calendar-alt", label: "Calendar", path: "/calendar", key: "Calendar" },
   { ic: "fa-users",        label: "Patients", path: "/patients", key: "Patients" },
-  { ic: "fa-comments",     label: "Messages", path: "/messages", key: "Messages", badge: 3 },
+  { ic: "fa-comments",     label: "Messages", path: "/messages", key: "Messages", badgeKey: "messages" },
   { ic: "fa-ellipsis-h",   label: "More",                       key: "More" },
 ];
 
@@ -118,6 +122,7 @@ function ClinicSidebar({
   slug,
   memberships,
   navRole,
+  badges,
 }: {
   active:      AdminNavKey;
   user:        SignedInClinicUser | null;
@@ -125,6 +130,7 @@ function ClinicSidebar({
   slug:        string;
   memberships: ClinicMembership[];
   navRole:     StaffRole | "superadmin" | null;
+  badges:      SidebarBadges;
 }) {
   const displayName = user?.displayName ?? "Signed in";
   const initials    = user?.displayName ? initialsOf(user.displayName) : "?";
@@ -144,6 +150,7 @@ function ClinicSidebar({
       <nav className="flex flex-1 flex-col gap-0.5">
         {NAV_ITEMS.filter((it) => navVisibleFor(it, navRole)).map((it) => {
           const isActive = it.label === active;
+          const badgeCount = it.badgeKey ? badges[it.badgeKey] : 0;
           return (
             <Link
               key={it.label}
@@ -157,7 +164,7 @@ function ClinicSidebar({
             >
               <i className={`fas ${it.ic} w-[18px] text-center text-[14px]`} />
               <span className="flex-1">{it.label}</span>
-              {it.badge && (
+              {badgeCount > 0 && (
                 <span
                   className={
                     "rounded-pill px-2 py-0.5 text-[10px] font-semibold " +
@@ -166,7 +173,7 @@ function ClinicSidebar({
                       : "bg-white/10 text-white")
                   }
                 >
-                  {it.badge}
+                  {badgeCount}
                 </span>
               )}
               {isActive && (
@@ -275,18 +282,19 @@ function ClinicTopBar({
   );
 }
 
-function ClinicMobileTabBar({ active, slug }: { active: AdminNavKey; slug: string }) {
+function ClinicMobileTabBar({ active, slug, badges }: { active: AdminNavKey; slug: string; badges: SidebarBadges }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 flex justify-around border-t border-border bg-white pt-2 pb-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] md:hidden">
       {MOBILE_TABS.map((t) => {
         const isActive = t.key === active;
+        const badgeCount = t.badgeKey ? badges[t.badgeKey] : 0;
         const content = (
           <div className="relative flex flex-col items-center gap-0.5 px-2 py-1">
             <i className={`fas ${t.ic} text-[18px] ${isActive ? "text-cta" : "text-muted"}`} />
             <span className={`text-[10px] ${isActive ? "font-semibold text-cta" : "text-muted"}`}>{t.label}</span>
-            {t.badge && (
+            {badgeCount > 0 && (
               <span className="absolute -right-0.5 top-0 rounded-pill bg-cta px-1.5 py-px text-[9px] font-semibold text-white">
-                {t.badge}
+                {badgeCount}
               </span>
             )}
           </div>
@@ -314,12 +322,13 @@ type Props = {
 };
 
 export async function ClinicAppLayout({ active, children, topBarSubtitle, dayLabel, dateLabel }: Props) {
-  const [user, lookups, memberships, urlSlug, activeMembership] = await Promise.all([
+  const [user, lookups, memberships, urlSlug, activeMembership, badges] = await Promise.all([
     getSignedInClinicUser(),
     getBookingLookups(),
     getMyClinicMemberships(),
     getActiveClinicSlug(),
     getActiveMembership(),
+    getAdminSidebarBadges(),
   ]);
   // Active-clinic role drives nav gating (a user can have different roles per
   // clinic). Fall back to the platform/display role for superadmins.
@@ -345,12 +354,13 @@ export async function ClinicAppLayout({ active, children, topBarSubtitle, dayLab
         slug={slug}
         memberships={memberships}
         navRole={navRole}
+        badges={badges}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <ClinicTopBar subtitle={topBarSubtitle} dayLabel={dayLabel} dateLabel={dateLabel} lookups={lookups} restrictToDoctorId={restrictToDoctorId} />
         <main className="flex-1 pb-24 md:pb-10">{children}</main>
       </div>
-      <ClinicMobileTabBar active={active} slug={slug} />
+      <ClinicMobileTabBar active={active} slug={slug} badges={badges} />
     </div>
   );
 }

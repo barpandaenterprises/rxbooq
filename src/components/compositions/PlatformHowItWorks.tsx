@@ -2,9 +2,9 @@ import Link from "next/link";
 
 const STEPS: { ic: string; title: string; desc: string }[] = [
   {
-    ic:    "fa-mobile-alt",
-    title: "Verify your phone",
-    desc:  "Enter your mobile number, confirm with a one-time code. No password yet — we save your progress as you go.",
+    ic:    "fa-envelope",
+    title: "Verify your email",
+    desc:  "Enter your email address, confirm with a one-time code. No password yet — we save your progress as you go.",
   },
   {
     ic:    "fa-user-md",

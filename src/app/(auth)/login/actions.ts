@@ -16,9 +16,14 @@ import { serverClient, serviceClient } from "@/lib/supabase/server";
  *   3. Superadmin (raw_app_meta_data.role='superadmin') → `/superadmin/clinics`.
  *   4. Nothing → `/` (platform marketing).
  *
- * On failure throws via redirect — the page catches via `?error=`.
+ * On success it redirects (throws NEXT_REDIRECT, which the client lets
+ * propagate). On failure it RETURNS { error } so the form can render the message
+ * inline — redirecting back to /login?error= doesn't work reliably because the
+ * persisted client form state wouldn't pick up the new query param.
  */
-export async function signInWithPassword(formData: FormData) {
+export async function signInWithPassword(
+  formData: FormData,
+): Promise<{ error: string } | void> {
   const email    = String(formData.get("email")    ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const nextRaw  = String(formData.get("next")     ?? "");
@@ -29,14 +34,14 @@ export async function signInWithPassword(formData: FormData) {
     : null;
 
   if (!email || !password) {
-    redirect(`/login?error=${encodeURIComponent("Email and password are required.")}${explicitNext ? `&next=${encodeURIComponent(explicitNext)}` : ""}`);
+    return { error: "Email and password are required." };
   }
 
   const supabase = await serverClient();
   const { data: signed, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}${explicitNext ? `&next=${encodeURIComponent(explicitNext)}` : ""}`);
+    return { error: friendlyAuthError(error.message) };
   }
 
   // If the caller asked for a specific destination, trust it (already whitelisted).
@@ -67,4 +72,19 @@ export async function signInWithPassword(formData: FormData) {
 
   // Signed in but unaffiliated — bounce to platform marketing.
   redirect("/");
+}
+
+/** Map Supabase's terse auth errors to clear, user-facing copy. */
+function friendlyAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("invalid login credentials")) {
+    return "Incorrect email or password. Please try again.";
+  }
+  if (m.includes("email not confirmed")) {
+    return "Please confirm your email address before signing in.";
+  }
+  if (m.includes("rate limit") || m.includes("too many")) {
+    return "Too many attempts. Please wait a moment and try again.";
+  }
+  return message || "Sign-in failed. Please try again.";
 }
