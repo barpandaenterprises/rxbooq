@@ -11,7 +11,7 @@ create extension if not exists "pgcrypto";
 -- 1. Tenant & identity
 -- =============================================================================
 
-create table public.clinics (
+create table if not exists public.clinics (
   id              uuid primary key default gen_random_uuid(),
   slug            text not null unique,
   custom_domain   text unique,
@@ -27,10 +27,10 @@ create table public.clinics (
   updated_at      timestamptz not null default now()
 );
 
-create index clinics_slug_idx          on public.clinics (slug);
-create index clinics_custom_domain_idx on public.clinics (custom_domain);
+create index if not exists clinics_slug_idx          on public.clinics (slug);
+create index if not exists clinics_custom_domain_idx on public.clinics (custom_domain);
 
-create table public.clinic_users (
+create table if not exists public.clinic_users (
   id            uuid primary key default gen_random_uuid(),
   clinic_id     uuid not null references public.clinics(id) on delete cascade,
   auth_user_id  uuid not null unique references auth.users(id) on delete cascade,
@@ -41,9 +41,9 @@ create table public.clinic_users (
   created_at    timestamptz not null default now()
 );
 
-create index clinic_users_clinic_idx on public.clinic_users (clinic_id);
+create index if not exists clinic_users_clinic_idx on public.clinic_users (clinic_id);
 
-create table public.doctors (
+create table if not exists public.doctors (
   id              uuid primary key default gen_random_uuid(),
   clinic_id       uuid not null references public.clinics(id) on delete cascade,
   display_name    text not null,
@@ -56,9 +56,9 @@ create table public.doctors (
   created_at      timestamptz not null default now()
 );
 
-create index doctors_clinic_idx on public.doctors (clinic_id);
+create index if not exists doctors_clinic_idx on public.doctors (clinic_id);
 
-create table public.patients (
+create table if not exists public.patients (
   id              uuid primary key default gen_random_uuid(),
   clinic_id       uuid not null references public.clinics(id) on delete cascade,
   full_name       text not null,
@@ -71,14 +71,14 @@ create table public.patients (
   unique (clinic_id, phone_e164)
 );
 
-create index patients_clinic_idx on public.patients (clinic_id);
-create index patients_phone_idx  on public.patients (clinic_id, phone_e164);
+create index if not exists patients_clinic_idx on public.patients (clinic_id);
+create index if not exists patients_phone_idx  on public.patients (clinic_id, phone_e164);
 
 -- =============================================================================
 -- 2. Scheduling
 -- =============================================================================
 
-create table public.services (
+create table if not exists public.services (
   id               uuid primary key default gen_random_uuid(),
   clinic_id        uuid not null references public.clinics(id) on delete cascade,
   name             text not null,
@@ -90,9 +90,9 @@ create table public.services (
   created_at       timestamptz not null default now()
 );
 
-create index services_clinic_idx on public.services (clinic_id);
+create index if not exists services_clinic_idx on public.services (clinic_id);
 
-create table public.doctor_availability (
+create table if not exists public.doctor_availability (
   id              uuid primary key default gen_random_uuid(),
   clinic_id       uuid not null references public.clinics(id) on delete cascade,
   doctor_id       uuid not null references public.doctors(id) on delete cascade,
@@ -106,10 +106,10 @@ create table public.doctor_availability (
   check (end_time > start_time)
 );
 
-create index doctor_availability_clinic_idx on public.doctor_availability (clinic_id);
-create index doctor_availability_doctor_idx on public.doctor_availability (doctor_id);
+create index if not exists doctor_availability_clinic_idx on public.doctor_availability (clinic_id);
+create index if not exists doctor_availability_doctor_idx on public.doctor_availability (doctor_id);
 
-create table public.availability_overrides (
+create table if not exists public.availability_overrides (
   id          uuid primary key default gen_random_uuid(),
   clinic_id   uuid not null references public.clinics(id) on delete cascade,
   doctor_id   uuid not null references public.doctors(id) on delete cascade,
@@ -121,9 +121,9 @@ create table public.availability_overrides (
   created_at  timestamptz not null default now()
 );
 
-create index availability_overrides_clinic_idx on public.availability_overrides (clinic_id, date);
+create index if not exists availability_overrides_clinic_idx on public.availability_overrides (clinic_id, date);
 
-create table public.appointments (
+create table if not exists public.appointments (
   id           uuid primary key default gen_random_uuid(),
   clinic_id    uuid not null references public.clinics(id) on delete cascade,
   patient_id   uuid not null references public.patients(id),
@@ -141,14 +141,14 @@ create table public.appointments (
   check (ends_at > starts_at)
 );
 
-create index appointments_clinic_idx       on public.appointments (clinic_id);
-create index appointments_doctor_time_idx  on public.appointments (clinic_id, doctor_id, starts_at);
-create index appointments_patient_idx      on public.appointments (clinic_id, patient_id);
-create index appointments_status_idx       on public.appointments (clinic_id, status);
+create index if not exists appointments_clinic_idx       on public.appointments (clinic_id);
+create index if not exists appointments_doctor_time_idx  on public.appointments (clinic_id, doctor_id, starts_at);
+create index if not exists appointments_patient_idx      on public.appointments (clinic_id, patient_id);
+create index if not exists appointments_status_idx       on public.appointments (clinic_id, status);
 
 -- Slot lock table: prevents two patients from booking the same slot in the
 -- same second. Booking server action does `select … for update` on this row.
-create table public.clinic_slot_locks (
+create table if not exists public.clinic_slot_locks (
   clinic_id  uuid not null references public.clinics(id) on delete cascade,
   doctor_id  uuid not null references public.doctors(id) on delete cascade,
   starts_at  timestamptz not null,
@@ -159,7 +159,7 @@ create table public.clinic_slot_locks (
 -- 3. Messaging + audit
 -- =============================================================================
 
-create table public.wa_templates (
+create table if not exists public.wa_templates (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
   language   text not null,
@@ -169,7 +169,7 @@ create table public.wa_templates (
   unique (name, language)
 );
 
-create table public.wa_messages (
+create table if not exists public.wa_messages (
   id                  uuid primary key default gen_random_uuid(),
   clinic_id           uuid not null references public.clinics(id) on delete cascade,
   patient_id          uuid not null references public.patients(id),
@@ -183,11 +183,11 @@ create table public.wa_messages (
   created_at          timestamptz not null default now()
 );
 
-create index wa_messages_clinic_idx       on public.wa_messages (clinic_id, created_at desc);
-create index wa_messages_patient_idx      on public.wa_messages (clinic_id, patient_id);
-create index wa_messages_appointment_idx  on public.wa_messages (appointment_id);
+create index if not exists wa_messages_clinic_idx       on public.wa_messages (clinic_id, created_at desc);
+create index if not exists wa_messages_patient_idx      on public.wa_messages (clinic_id, patient_id);
+create index if not exists wa_messages_appointment_idx  on public.wa_messages (appointment_id);
 
-create table public.audit_logs (
+create table if not exists public.audit_logs (
   id             bigserial primary key,
   clinic_id      uuid references public.clinics(id) on delete set null,
   actor_user_id  uuid,
@@ -199,7 +199,7 @@ create table public.audit_logs (
   created_at     timestamptz not null default now()
 );
 
-create index audit_logs_clinic_idx on public.audit_logs (clinic_id, created_at desc);
+create index if not exists audit_logs_clinic_idx on public.audit_logs (clinic_id, created_at desc);
 
 -- =============================================================================
 -- 4. updated_at triggers
@@ -212,5 +212,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists clinics_updated_at on public.clinics;
 create trigger clinics_updated_at      before update on public.clinics      for each row execute function public.touch_updated_at();
+drop trigger if exists appointments_updated_at on public.appointments;
 create trigger appointments_updated_at before update on public.appointments for each row execute function public.touch_updated_at();

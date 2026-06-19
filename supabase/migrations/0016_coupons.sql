@@ -14,7 +14,7 @@
 -- the superadmin coupon create action.
 -- =============================================================================
 
-create table public.coupons (
+create table if not exists public.coupons (
   id                uuid primary key default gen_random_uuid(),
   -- Stored lowercase; client uploads any case, server lowercases.
   code              text not null unique,
@@ -32,10 +32,11 @@ create table public.coupons (
   check (kind = 'flat' or (value between 1 and 100))
 );
 
-create index coupons_active_idx
+create index if not exists coupons_active_idx
   on public.coupons (is_active)
   where is_active;
 
+drop trigger if exists coupons_updated_at on public.coupons;
 create trigger coupons_updated_at
   before update on public.coupons
   for each row execute function public.touch_updated_at();
@@ -46,7 +47,7 @@ create trigger coupons_updated_at
 -- commission attribution.
 -- =============================================================================
 
-create table public.coupon_redemptions (
+create table if not exists public.coupon_redemptions (
   id                          uuid primary key default gen_random_uuid(),
   coupon_id                   uuid not null references public.coupons(id) on delete restrict,
   clinic_id                   uuid not null references public.clinics(id) on delete cascade,
@@ -56,9 +57,9 @@ create table public.coupon_redemptions (
   partner_user_id_snapshot    uuid
 );
 
-create index coupon_redemptions_coupon_idx  on public.coupon_redemptions (coupon_id, redeemed_at desc);
-create index coupon_redemptions_clinic_idx  on public.coupon_redemptions (clinic_id);
-create index coupon_redemptions_partner_idx on public.coupon_redemptions (partner_user_id_snapshot)
+create index if not exists coupon_redemptions_coupon_idx  on public.coupon_redemptions (coupon_id, redeemed_at desc);
+create index if not exists coupon_redemptions_clinic_idx  on public.coupon_redemptions (clinic_id);
+create index if not exists coupon_redemptions_partner_idx on public.coupon_redemptions (partner_user_id_snapshot)
   where partner_user_id_snapshot is not null;
 
 -- =============================================================================
@@ -73,9 +74,11 @@ create index coupon_redemptions_partner_idx on public.coupon_redemptions (partne
 
 alter table public.coupons enable row level security;
 
+drop policy if exists coupons_public_read on public.coupons;
 create policy coupons_public_read on public.coupons
   for select to anon, authenticated using (is_active);
 
+drop policy if exists coupons_superadmin_all on public.coupons;
 create policy coupons_superadmin_all on public.coupons
   for all to authenticated
   using (public.is_super_admin())
@@ -83,6 +86,7 @@ create policy coupons_superadmin_all on public.coupons
 
 alter table public.coupon_redemptions enable row level security;
 
+drop policy if exists coupon_redemptions_superadmin_read on public.coupon_redemptions;
 create policy coupon_redemptions_superadmin_read on public.coupon_redemptions
   for select to authenticated using (public.is_super_admin());
 
@@ -94,10 +98,16 @@ create policy coupon_redemptions_superadmin_read on public.coupon_redemptions
 -- =============================================================================
 
 alter table public.clinic_applications
+  drop constraint if exists clinic_applications_coupon_fk;
+
+alter table public.clinic_applications
   add constraint clinic_applications_coupon_fk
     foreign key (applied_coupon_id)
     references public.coupons(id)
     on delete set null;
+
+alter table public.subscriptions
+  drop constraint if exists subscriptions_coupon_fk;
 
 alter table public.subscriptions
   add constraint subscriptions_coupon_fk

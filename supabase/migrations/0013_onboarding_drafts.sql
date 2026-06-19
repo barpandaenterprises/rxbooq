@@ -66,7 +66,7 @@ alter table public.clinic_applications
 
 drop index if exists public.clinic_applications_one_active_per_user;
 
-create unique index clinic_applications_one_active_per_user
+create unique index if not exists clinic_applications_one_active_per_user
   on public.clinic_applications (auth_user_id)
   where auth_user_id is not null
     and status in ('pending', 'approved', 'active');
@@ -87,6 +87,9 @@ create index if not exists clinic_applications_phone_idx
 --    must be populated. Keeps the post-finalize invariants the rest of the
 --    system relies on.
 -- =============================================================================
+
+alter table public.clinic_applications
+  drop constraint if exists clinic_applications_submitted_complete;
 
 alter table public.clinic_applications
   add constraint clinic_applications_submitted_complete

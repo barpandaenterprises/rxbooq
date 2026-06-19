@@ -46,6 +46,9 @@ end $$;
 --    "You can only be in a given clinic once" stays true; cross-clinic
 --    membership is now allowed.
 alter table public.clinic_users
+  drop constraint if exists clinic_users_clinic_user_uniq;
+
+alter table public.clinic_users
   add constraint clinic_users_clinic_user_uniq
   unique (clinic_id, auth_user_id);
 

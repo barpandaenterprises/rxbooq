@@ -56,6 +56,7 @@ $$;
 -- =============================================================================
 
 -- Staff read their own clinic's files
+drop policy if exists clinic_files_staff_select on storage.objects;
 create policy clinic_files_staff_select on storage.objects
   for select to authenticated using (
     bucket_id = 'clinic-files'
@@ -66,6 +67,7 @@ create policy clinic_files_staff_select on storage.objects
   );
 
 -- Staff insert: enforce path starts with clinics/{their clinic_id}/
+drop policy if exists clinic_files_staff_insert on storage.objects;
 create policy clinic_files_staff_insert on storage.objects
   for insert to authenticated with check (
     bucket_id = 'clinic-files'
@@ -76,6 +78,7 @@ create policy clinic_files_staff_insert on storage.objects
     )
   );
 
+drop policy if exists clinic_files_staff_update on storage.objects;
 create policy clinic_files_staff_update on storage.objects
   for update to authenticated using (
     bucket_id = 'clinic-files'
@@ -91,6 +94,7 @@ create policy clinic_files_staff_update on storage.objects
     )
   );
 
+drop policy if exists clinic_files_staff_delete on storage.objects;
 create policy clinic_files_staff_delete on storage.objects
   for delete to authenticated using (
     bucket_id = 'clinic-files'
@@ -101,6 +105,7 @@ create policy clinic_files_staff_delete on storage.objects
   );
 
 -- Patient self-access: read only files attached to their own visit_attachments row
+drop policy if exists clinic_files_patient_self_select on storage.objects;
 create policy clinic_files_patient_self_select on storage.objects
   for select to authenticated using (
     bucket_id = 'clinic-files'
@@ -117,11 +122,13 @@ create policy clinic_files_patient_self_select on storage.objects
 -- =============================================================================
 
 -- Anyone (including anon) can read public assets
+drop policy if exists public_assets_anon_select on storage.objects;
 create policy public_assets_anon_select on storage.objects
   for select to anon, authenticated using (
     bucket_id = 'public-assets'
   );
 
+drop policy if exists public_assets_staff_insert on storage.objects;
 create policy public_assets_staff_insert on storage.objects
   for insert to authenticated with check (
     bucket_id = 'public-assets'
@@ -132,6 +139,7 @@ create policy public_assets_staff_insert on storage.objects
     )
   );
 
+drop policy if exists public_assets_staff_update on storage.objects;
 create policy public_assets_staff_update on storage.objects
   for update to authenticated using (
     bucket_id = 'public-assets'
@@ -147,6 +155,7 @@ create policy public_assets_staff_update on storage.objects
     )
   );
 
+drop policy if exists public_assets_staff_delete on storage.objects;
 create policy public_assets_staff_delete on storage.objects
   for delete to authenticated using (
     bucket_id = 'public-assets'

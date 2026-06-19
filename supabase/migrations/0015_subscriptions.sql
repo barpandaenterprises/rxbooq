@@ -7,7 +7,7 @@
 -- means trialing / active / past_due. Cancelled / paused rows stay for history.
 -- =============================================================================
 
-create table public.subscriptions (
+create table if not exists public.subscriptions (
   id                        uuid primary key default gen_random_uuid(),
   clinic_id                 uuid not null references public.clinics(id) on delete cascade,
   plan_id                   uuid not null references public.subscription_plans(id),
@@ -25,17 +25,18 @@ create table public.subscriptions (
   updated_at                timestamptz not null default now()
 );
 
-create index subscriptions_clinic_idx     on public.subscriptions (clinic_id, status);
-create index subscriptions_status_idx     on public.subscriptions (status);
-create index subscriptions_trial_due_idx
+create index if not exists subscriptions_clinic_idx     on public.subscriptions (clinic_id, status);
+create index if not exists subscriptions_status_idx     on public.subscriptions (status);
+create index if not exists subscriptions_trial_due_idx
   on public.subscriptions (trial_ends_at)
   where status = 'trialing';
 
 -- Exactly one in-flight subscription per clinic.
-create unique index subscriptions_one_active_per_clinic
+create unique index if not exists subscriptions_one_active_per_clinic
   on public.subscriptions (clinic_id)
   where status in ('trialing', 'active', 'past_due');
 
+drop trigger if exists subscriptions_updated_at on public.subscriptions;
 create trigger subscriptions_updated_at
   before update on public.subscriptions
   for each row execute function public.touch_updated_at();
@@ -49,6 +50,7 @@ create trigger subscriptions_updated_at
 
 alter table public.subscriptions enable row level security;
 
+drop policy if exists subscriptions_tenant_read on public.subscriptions;
 create policy subscriptions_tenant_read on public.subscriptions
   for select to authenticated
   using (

@@ -58,16 +58,19 @@ declare
 begin
   foreach t in array scoped_tables loop
     execute format($f$
+      drop policy if exists %I_tenant_select on public.%I;
       create policy %I_tenant_select on public.%I
         for select using (
           clinic_id = public.current_clinic_id() or public.is_super_admin()
         );
 
+      drop policy if exists %I_tenant_insert on public.%I;
       create policy %I_tenant_insert on public.%I
         for insert with check (
           clinic_id = public.current_clinic_id() or public.is_super_admin()
         );
 
+      drop policy if exists %I_tenant_update on public.%I;
       create policy %I_tenant_update on public.%I
         for update using (
           clinic_id = public.current_clinic_id() or public.is_super_admin()
@@ -75,11 +78,12 @@ begin
           clinic_id = public.current_clinic_id() or public.is_super_admin()
         );
 
+      drop policy if exists %I_tenant_delete on public.%I;
       create policy %I_tenant_delete on public.%I
         for delete using (
           clinic_id = public.current_clinic_id() or public.is_super_admin()
         );
-    $f$, t, t, t, t, t, t, t, t);
+    $f$, t, t, t, t, t, t, t, t, t, t, t, t, t, t, t, t);
   end loop;
 end $$;
 
@@ -87,11 +91,13 @@ end $$;
 -- clinics: super-admin all, clinic staff read-only their own
 -- =============================================================================
 
+drop policy if exists clinics_select on public.clinics;
 create policy clinics_select on public.clinics
   for select using (
     id = public.current_clinic_id() or public.is_super_admin()
   );
 
+drop policy if exists clinics_super_admin_all on public.clinics;
 create policy clinics_super_admin_all on public.clinics
   for all using (public.is_super_admin())
   with check (public.is_super_admin());
@@ -100,9 +106,11 @@ create policy clinics_super_admin_all on public.clinics
 -- wa_templates: global read, super-admin write
 -- =============================================================================
 
+drop policy if exists wa_templates_select on public.wa_templates;
 create policy wa_templates_select on public.wa_templates
   for select using (true);
 
+drop policy if exists wa_templates_super_admin_write on public.wa_templates;
 create policy wa_templates_super_admin_write on public.wa_templates
   for all using (public.is_super_admin())
   with check (public.is_super_admin());

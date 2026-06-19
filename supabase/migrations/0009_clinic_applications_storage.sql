@@ -56,6 +56,7 @@ $$;
 --    Superadmin: read everything.
 -- =============================================================================
 
+drop policy if exists clinic_applications_self_select on storage.objects;
 create policy clinic_applications_self_select on storage.objects
   for select to authenticated using (
     bucket_id = 'clinic-applications'
@@ -65,6 +66,7 @@ create policy clinic_applications_self_select on storage.objects
     )
   );
 
+drop policy if exists clinic_applications_self_insert on storage.objects;
 create policy clinic_applications_self_insert on storage.objects
   for insert to authenticated with check (
     bucket_id = 'clinic-applications'
@@ -72,6 +74,7 @@ create policy clinic_applications_self_insert on storage.objects
     and public.storage_applicant_id_from_path(name) = auth.uid()
   );
 
+drop policy if exists clinic_applications_self_update on storage.objects;
 create policy clinic_applications_self_update on storage.objects
   for update to authenticated using (
     bucket_id = 'clinic-applications'
@@ -81,6 +84,7 @@ create policy clinic_applications_self_update on storage.objects
     and public.storage_applicant_id_from_path(name) = auth.uid()
   );
 
+drop policy if exists clinic_applications_self_delete on storage.objects;
 create policy clinic_applications_self_delete on storage.objects
   for delete to authenticated using (
     bucket_id = 'clinic-applications'

@@ -29,7 +29,7 @@ end $$;
 -- =============================================================================
 
 -- ---- visit_notes -----------------------------------------------------------
-create table public.visit_notes (
+create table if not exists public.visit_notes (
   id                 uuid primary key default gen_random_uuid(),
   clinic_id          uuid not null references public.clinics(id)      on delete cascade,
   appointment_id     uuid references public.appointments(id)          on delete set null,
@@ -45,12 +45,12 @@ create table public.visit_notes (
   updated_at         timestamptz not null default now()
 );
 
-create index visit_notes_clinic_idx      on public.visit_notes (clinic_id);
-create index visit_notes_patient_idx     on public.visit_notes (clinic_id, patient_id, visit_date desc);
-create index visit_notes_appointment_idx on public.visit_notes (appointment_id);
+create index if not exists visit_notes_clinic_idx      on public.visit_notes (clinic_id);
+create index if not exists visit_notes_patient_idx     on public.visit_notes (clinic_id, patient_id, visit_date desc);
+create index if not exists visit_notes_appointment_idx on public.visit_notes (appointment_id);
 
 -- ---- visit_attachments (created before prescriptions; prescriptions.source_photo_id FKs into it) ----
-create table public.visit_attachments (
+create table if not exists public.visit_attachments (
   id                uuid primary key default gen_random_uuid(),
   clinic_id         uuid not null references public.clinics(id)      on delete cascade,
   appointment_id    uuid references public.appointments(id)          on delete set null,
@@ -67,13 +67,13 @@ create table public.visit_attachments (
   created_at        timestamptz not null default now()
 );
 
-create index visit_attachments_clinic_idx      on public.visit_attachments (clinic_id);
-create index visit_attachments_patient_idx     on public.visit_attachments (clinic_id, patient_id, created_at desc);
-create index visit_attachments_appointment_idx on public.visit_attachments (appointment_id);
-create index visit_attachments_kind_idx        on public.visit_attachments (clinic_id, kind);
+create index if not exists visit_attachments_clinic_idx      on public.visit_attachments (clinic_id);
+create index if not exists visit_attachments_patient_idx     on public.visit_attachments (clinic_id, patient_id, created_at desc);
+create index if not exists visit_attachments_appointment_idx on public.visit_attachments (appointment_id);
+create index if not exists visit_attachments_kind_idx        on public.visit_attachments (clinic_id, kind);
 
 -- ---- prescriptions ---------------------------------------------------------
-create table public.prescriptions (
+create table if not exists public.prescriptions (
   id                uuid primary key default gen_random_uuid(),
   clinic_id         uuid not null references public.clinics(id)            on delete cascade,
   appointment_id    uuid references public.appointments(id)                on delete set null,
@@ -89,12 +89,12 @@ create table public.prescriptions (
   created_at        timestamptz not null default now()
 );
 
-create index prescriptions_clinic_idx      on public.prescriptions (clinic_id);
-create index prescriptions_patient_idx     on public.prescriptions (clinic_id, patient_id, created_at desc);
-create index prescriptions_appointment_idx on public.prescriptions (appointment_id);
+create index if not exists prescriptions_clinic_idx      on public.prescriptions (clinic_id);
+create index if not exists prescriptions_patient_idx     on public.prescriptions (clinic_id, patient_id, created_at desc);
+create index if not exists prescriptions_appointment_idx on public.prescriptions (appointment_id);
 
 -- ---- prescription_items ----------------------------------------------------
-create table public.prescription_items (
+create table if not exists public.prescription_items (
   id                uuid primary key default gen_random_uuid(),
   prescription_id   uuid not null references public.prescriptions(id) on delete cascade,
   position          int not null,
@@ -106,10 +106,10 @@ create table public.prescription_items (
   unique (prescription_id, position)
 );
 
-create index prescription_items_rx_idx on public.prescription_items (prescription_id, position);
+create index if not exists prescription_items_rx_idx on public.prescription_items (prescription_id, position);
 
 -- ---- visit_tooth_treatments ------------------------------------------------
-create table public.visit_tooth_treatments (
+create table if not exists public.visit_tooth_treatments (
   id              uuid primary key default gen_random_uuid(),
   clinic_id       uuid not null references public.clinics(id)      on delete cascade,
   appointment_id  uuid not null references public.appointments(id) on delete cascade,
@@ -121,12 +121,12 @@ create table public.visit_tooth_treatments (
   created_at      timestamptz not null default now()
 );
 
-create index visit_tooth_clinic_idx      on public.visit_tooth_treatments (clinic_id);
-create index visit_tooth_appointment_idx on public.visit_tooth_treatments (appointment_id);
-create index visit_tooth_patient_idx     on public.visit_tooth_treatments (clinic_id, patient_id);
+create index if not exists visit_tooth_clinic_idx      on public.visit_tooth_treatments (clinic_id);
+create index if not exists visit_tooth_appointment_idx on public.visit_tooth_treatments (appointment_id);
+create index if not exists visit_tooth_patient_idx     on public.visit_tooth_treatments (clinic_id, patient_id);
 
 -- ---- medical_history (one row per patient) ---------------------------------
-create table public.medical_history (
+create table if not exists public.medical_history (
   patient_id            uuid primary key references public.patients(id) on delete cascade,
   clinic_id             uuid not null references public.clinics(id)      on delete cascade,
   blood_thinners        boolean not null default false,
@@ -137,13 +137,13 @@ create table public.medical_history (
   updated_at            timestamptz not null default now()
 );
 
-create index medical_history_clinic_idx on public.medical_history (clinic_id);
+create index if not exists medical_history_clinic_idx on public.medical_history (clinic_id);
 
 -- =============================================================================
 -- 3. Patient self-service identity (used by JWT hook to inject patient_id claim)
 -- =============================================================================
 
-create table public.patient_users (
+create table if not exists public.patient_users (
   auth_user_id   uuid primary key references auth.users(id)        on delete cascade,
   patient_id     uuid not null references public.patients(id)      on delete cascade,
   clinic_id      uuid not null references public.clinics(id)       on delete cascade,
@@ -152,14 +152,14 @@ create table public.patient_users (
   unique (clinic_id, patient_id)
 );
 
-create index patient_users_patient_idx on public.patient_users (patient_id);
-create index patient_users_clinic_idx  on public.patient_users (clinic_id);
+create index if not exists patient_users_patient_idx on public.patient_users (patient_id);
+create index if not exists patient_users_clinic_idx  on public.patient_users (clinic_id);
 
 -- =============================================================================
 -- 4. OTP store (WhatsApp OTP custom flow)
 -- =============================================================================
 
-create table public.otp_codes (
+create table if not exists public.otp_codes (
   id            uuid primary key default gen_random_uuid(),
   clinic_id     uuid not null references public.clinics(id) on delete cascade,
   phone_e164    text not null,
@@ -171,14 +171,16 @@ create table public.otp_codes (
   created_at    timestamptz not null default now()
 );
 
-create index otp_codes_lookup_idx on public.otp_codes (clinic_id, phone_e164, created_at desc);
+create index if not exists otp_codes_lookup_idx on public.otp_codes (clinic_id, phone_e164, created_at desc);
 
 -- =============================================================================
 -- 5. updated_at triggers for new tables that mutate
 -- =============================================================================
 
+drop trigger if exists visit_notes_updated_at on public.visit_notes;
 create trigger visit_notes_updated_at      before update on public.visit_notes
   for each row execute function public.touch_updated_at();
 
+drop trigger if exists medical_history_updated_at on public.medical_history;
 create trigger medical_history_updated_at  before update on public.medical_history
   for each row execute function public.touch_updated_at();

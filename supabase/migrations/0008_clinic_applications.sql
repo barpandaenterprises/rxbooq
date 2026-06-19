@@ -87,6 +87,7 @@ create unique index if not exists clinic_applications_one_active_per_user
   on public.clinic_applications (auth_user_id)
   where status in ('pending', 'approved');
 
+drop trigger if exists clinic_applications_updated_at on public.clinic_applications;
 create trigger clinic_applications_updated_at
   before update on public.clinic_applications
   for each row execute function public.touch_updated_at();
@@ -101,12 +102,14 @@ create trigger clinic_applications_updated_at
 
 alter table public.clinic_applications enable row level security;
 
+drop policy if exists clinic_applications_self_read on public.clinic_applications;
 create policy clinic_applications_self_read on public.clinic_applications
   for select to authenticated using (
     auth_user_id = auth.uid()
     or public.is_super_admin()
   );
 
+drop policy if exists clinic_applications_self_insert on public.clinic_applications;
 create policy clinic_applications_self_insert on public.clinic_applications
   for insert to authenticated with check (
     auth_user_id = auth.uid()
@@ -116,6 +119,7 @@ create policy clinic_applications_self_insert on public.clinic_applications
 -- Applicant can edit their own row only while pending or rejected (so they can
 -- correct details and re-apply). They cannot change status, reviewed_*,
 -- or clinic_id — those are superadmin-only.
+drop policy if exists clinic_applications_self_update on public.clinic_applications;
 create policy clinic_applications_self_update on public.clinic_applications
   for update to authenticated using (
     auth_user_id = auth.uid()
@@ -124,6 +128,7 @@ create policy clinic_applications_self_update on public.clinic_applications
     auth_user_id = auth.uid()
   );
 
+drop policy if exists clinic_applications_superadmin_all on public.clinic_applications;
 create policy clinic_applications_superadmin_all on public.clinic_applications
   for all to authenticated using (
     public.is_super_admin()

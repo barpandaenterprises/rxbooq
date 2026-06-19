@@ -48,16 +48,19 @@ declare
 begin
   foreach t in array scoped_tables loop
     execute format($f$
+      drop policy if exists %I_tenant_select on public.%I;
       create policy %I_tenant_select on public.%I
         for select using (
           clinic_id = public.current_clinic_id() or public.is_super_admin()
         );
 
+      drop policy if exists %I_tenant_insert on public.%I;
       create policy %I_tenant_insert on public.%I
         for insert with check (
           clinic_id = public.current_clinic_id() or public.is_super_admin()
         );
 
+      drop policy if exists %I_tenant_update on public.%I;
       create policy %I_tenant_update on public.%I
         for update using (
           clinic_id = public.current_clinic_id() or public.is_super_admin()
@@ -65,11 +68,12 @@ begin
           clinic_id = public.current_clinic_id() or public.is_super_admin()
         );
 
+      drop policy if exists %I_tenant_delete on public.%I;
       create policy %I_tenant_delete on public.%I
         for delete using (
           clinic_id = public.current_clinic_id() or public.is_super_admin()
         );
-    $f$, t, t, t, t, t, t, t, t);
+    $f$, t, t, t, t, t, t, t, t, t, t, t, t, t, t, t, t);
   end loop;
 end $$;
 
@@ -77,6 +81,7 @@ end $$;
 -- 4. prescription_items: no clinic_id column — gate via join through prescriptions
 -- =============================================================================
 
+drop policy if exists prescription_items_tenant_select on public.prescription_items;
 create policy prescription_items_tenant_select on public.prescription_items
   for select using (
     exists (
@@ -86,6 +91,7 @@ create policy prescription_items_tenant_select on public.prescription_items
     )
   );
 
+drop policy if exists prescription_items_tenant_insert on public.prescription_items;
 create policy prescription_items_tenant_insert on public.prescription_items
   for insert with check (
     exists (
@@ -95,6 +101,7 @@ create policy prescription_items_tenant_insert on public.prescription_items
     )
   );
 
+drop policy if exists prescription_items_tenant_update on public.prescription_items;
 create policy prescription_items_tenant_update on public.prescription_items
   for update using (
     exists (
@@ -110,6 +117,7 @@ create policy prescription_items_tenant_update on public.prescription_items
     )
   );
 
+drop policy if exists prescription_items_tenant_delete on public.prescription_items;
 create policy prescription_items_tenant_delete on public.prescription_items
   for delete using (
     exists (
@@ -126,6 +134,7 @@ create policy prescription_items_tenant_delete on public.prescription_items
 -- =============================================================================
 
 -- Patient sees their own row
+drop policy if exists patients_self_select on public.patients;
 create policy patients_self_select on public.patients
   for select using (
     public.current_patient_id() is not null
@@ -133,6 +142,7 @@ create policy patients_self_select on public.patients
   );
 
 -- Patient sees their own appointments
+drop policy if exists appointments_patient_self_select on public.appointments;
 create policy appointments_patient_self_select on public.appointments
   for select using (
     public.current_patient_id() is not null
@@ -140,6 +150,7 @@ create policy appointments_patient_self_select on public.appointments
   );
 
 -- Patient sees their own visit notes
+drop policy if exists visit_notes_patient_self_select on public.visit_notes;
 create policy visit_notes_patient_self_select on public.visit_notes
   for select using (
     public.current_patient_id() is not null
@@ -147,6 +158,7 @@ create policy visit_notes_patient_self_select on public.visit_notes
   );
 
 -- Patient sees their own prescriptions
+drop policy if exists prescriptions_patient_self_select on public.prescriptions;
 create policy prescriptions_patient_self_select on public.prescriptions
   for select using (
     public.current_patient_id() is not null
@@ -154,6 +166,7 @@ create policy prescriptions_patient_self_select on public.prescriptions
   );
 
 -- Patient sees the items of their own prescriptions (join)
+drop policy if exists prescription_items_patient_self_select on public.prescription_items;
 create policy prescription_items_patient_self_select on public.prescription_items
   for select using (
     public.current_patient_id() is not null
@@ -165,6 +178,7 @@ create policy prescription_items_patient_self_select on public.prescription_item
   );
 
 -- Patient sees their own attachments
+drop policy if exists visit_attachments_patient_self_select on public.visit_attachments;
 create policy visit_attachments_patient_self_select on public.visit_attachments
   for select using (
     public.current_patient_id() is not null
@@ -172,6 +186,7 @@ create policy visit_attachments_patient_self_select on public.visit_attachments
   );
 
 -- Patient sees their own medical history
+drop policy if exists medical_history_patient_self_select on public.medical_history;
 create policy medical_history_patient_self_select on public.medical_history
   for select using (
     public.current_patient_id() is not null
@@ -179,5 +194,6 @@ create policy medical_history_patient_self_select on public.medical_history
   );
 
 -- patient_users: a patient sees only their own mapping row (by auth.uid)
+drop policy if exists patient_users_self_select on public.patient_users;
 create policy patient_users_self_select on public.patient_users
   for select using (auth_user_id = auth.uid());

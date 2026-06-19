@@ -18,7 +18,7 @@
 -- 1. subscription_plans
 -- =============================================================================
 
-create table public.subscription_plans (
+create table if not exists public.subscription_plans (
   id                       uuid primary key default gen_random_uuid(),
   code                     text not null unique
                              check (code in ('free', 'visibility', 'practice', 'pro')),
@@ -37,9 +37,10 @@ create table public.subscription_plans (
   updated_at               timestamptz not null default now()
 );
 
-create index subscription_plans_active_idx
+create index if not exists subscription_plans_active_idx
   on public.subscription_plans (is_active, sort_order);
 
+drop trigger if exists subscription_plans_updated_at on public.subscription_plans;
 create trigger subscription_plans_updated_at
   before update on public.subscription_plans
   for each row execute function public.touch_updated_at();
@@ -51,9 +52,11 @@ create trigger subscription_plans_updated_at
 
 alter table public.subscription_plans enable row level security;
 
+drop policy if exists subscription_plans_public_read on public.subscription_plans;
 create policy subscription_plans_public_read on public.subscription_plans
   for select to anon, authenticated using (is_active);
 
+drop policy if exists subscription_plans_superadmin_all on public.subscription_plans;
 create policy subscription_plans_superadmin_all on public.subscription_plans
   for all to authenticated
   using (public.is_super_admin())
@@ -151,6 +154,9 @@ insert into public.subscription_plans (
 -- =============================================================================
 -- 4. Tighten the 0013-deferred FK on clinic_applications.selected_plan_id.
 -- =============================================================================
+
+alter table public.clinic_applications
+  drop constraint if exists clinic_applications_plan_fk;
 
 alter table public.clinic_applications
   add constraint clinic_applications_plan_fk
