@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
@@ -33,11 +34,14 @@ export function PlatformSiteFooter() {
       <div className="mx-auto max-w-[1200px] px-5 py-10 md:px-8 md:py-14">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2 text-[16px] font-bold text-heading no-underline">
-              <span className="grid h-8 w-8 place-items-center rounded-md bg-brand text-[14px] text-white">
-                <i className="fas fa-heartbeat" />
-              </span>
-              Rxbooq
+            <Link href="/" className="inline-flex items-center no-underline">
+              <Image
+                src="/images/logo/rxbooq-logo.png"
+                alt="Rxbooq"
+                width={180}
+                height={46}
+                className="h-9 w-auto"
+              />
             </Link>
             <p className="mt-3 text-[13px] leading-[20px] text-muted">
               Modern clinic software for India — public profile, online booking, EMR, and WhatsApp engagement.

@@ -5,7 +5,6 @@ import { PlatformHero } from "@/components/compositions/PlatformHero";
 import { PlatformFeatureGrid } from "@/components/compositions/PlatformFeatureGrid";
 import { PlatformHowItWorks } from "@/components/compositions/PlatformHowItWorks";
 import { PlatformPlansTeaser } from "@/components/compositions/PlatformPlansTeaser";
-import { FeaturedClinics } from "@/components/compositions/FeaturedClinics";
 import { PlatformTestimonials } from "@/components/compositions/PlatformTestimonials";
 import { PlatformCtaStrip } from "@/components/compositions/PlatformCtaStrip";
 
@@ -38,7 +37,6 @@ export default function Home() {
       <PlatformFeatureGrid />
       <PlatformHowItWorks />
       <PlatformPlansTeaser />
-      <FeaturedClinics />
       <PlatformTestimonials />
       <PlatformCtaStrip />
     </PlatformSiteLayout>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSignedInClinicUser, type SignedInClinicUser } from "@/lib/auth/current-user";
@@ -38,16 +39,18 @@ const NAV_ITEMS: Array<{
 export function SuperAdminTopBar() {
   return (
     <header className="flex items-center gap-6 border-b-[3px] border-link-hover bg-brand px-5 py-3 text-white md:px-8">
-      <div className="flex items-center gap-2.5">
-        <span className="grid h-8 w-8 place-items-center rounded-md bg-white text-[14px] text-brand">
-          <i className="fas fa-bolt" />
+      <div className="flex items-center gap-3">
+        <Image
+          src="/images/logo/rxbooq-logo-white.png"
+          alt="Rxbooq"
+          width={150}
+          height={39}
+          priority
+          className="h-7 w-auto"
+        />
+        <span className="hidden border-l border-white/25 pl-3 text-[10px] uppercase tracking-[0.06em] text-white/70 sm:block">
+          Super-admin console
         </span>
-        <div>
-          <div className="text-[15px] font-bold leading-[17px]">Rxbooq</div>
-          <div className="text-[10px] uppercase tracking-[0.06em] text-white/70">
-            Super-admin console
-          </div>
-        </div>
       </div>
 
       <div className="ml-0 flex flex-1 items-center gap-2.5 rounded-md border border-white/20 bg-white/15 px-3.5 py-2 md:ml-6 md:max-w-[520px]">
@@ -179,10 +182,13 @@ export async function SuperAdminLayout({ active, children, slim }: Props) {
 function SuperAdminTopBarSlim() {
   return (
     <header className="flex items-center gap-3.5 border-b-[3px] border-link-hover bg-brand px-5 py-2.5 text-[13px] text-white md:px-8">
-      <span className="grid h-[26px] w-[26px] place-items-center rounded-sm bg-white text-[11px] text-brand">
-        <i className="fas fa-bolt" />
-      </span>
-      <span className="font-semibold">Rxbooq</span>
+      <Image
+        src="/images/logo/rxbooq-logo-white.png"
+        alt="Rxbooq"
+        width={110}
+        height={28}
+        className="h-[22px] w-auto"
+      />
       <span className="text-white/70">·</span>
       <span className="text-white/85">Onboarding</span>
       <i className="fas fa-chevron-right text-[9px] text-white/55" />

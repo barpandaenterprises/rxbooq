@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export const metadata = {
@@ -10,8 +11,15 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
     <div className="min-h-screen bg-[#fafbfc] text-body">
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-          <Link href="/" className="text-[17px] font-semibold text-heading no-underline">
-            Rxbooq
+          <Link href="/" className="flex flex-none items-center no-underline">
+            <Image
+              src="/images/logo/rxbooq-logo.png"
+              alt="Rxbooq"
+              width={160}
+              height={41}
+              priority
+              className="h-8 w-auto"
+            />
           </Link>
           <Link
             href="/login"

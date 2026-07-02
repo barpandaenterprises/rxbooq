@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const NAV_ITEMS = [
@@ -10,14 +11,15 @@ export function PlatformSiteHeader() {
   return (
     <nav className="sticky top-0 z-30 flex h-16 items-center border-b border-border bg-white/95 backdrop-blur md:h-[72px]">
       <div className="mx-auto flex w-full max-w-[1200px] items-center gap-3 px-4 md:gap-8 md:px-8">
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-[16px] font-bold leading-tight text-heading no-underline md:gap-2.5 md:text-[18px]"
-        >
-          <span className="grid h-8 w-8 flex-none place-items-center rounded-md bg-brand text-[14px] text-white md:h-9 md:w-9 md:text-[16px]">
-            <i className="fas fa-heartbeat" />
-          </span>
-          <span className="leading-tight">Rxbooq</span>
+        <Link href="/" className="flex flex-none items-center no-underline">
+          <Image
+            src="/images/logo/rxbooq-logo.png"
+            alt="Rxbooq"
+            width={170}
+            height={44}
+            priority
+            className="h-8 w-auto md:h-9"
+          />
         </Link>
 
         <div className="ml-6 hidden items-center gap-7 md:flex">

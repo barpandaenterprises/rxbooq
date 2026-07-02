@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { serviceClient } from "@/lib/supabase/server";
 import { formatInr } from "@/lib/billing/pricing";
@@ -46,7 +47,16 @@ export default async function PricingPage() {
     <div className="min-h-screen bg-[#fafbfc] pb-16 text-body">
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="text-[17px] font-semibold text-heading no-underline">Rxbooq</Link>
+          <Link href="/" className="flex flex-none items-center no-underline">
+            <Image
+              src="/images/logo/rxbooq-logo.png"
+              alt="Rxbooq"
+              width={160}
+              height={41}
+              priority
+              className="h-8 w-auto"
+            />
+          </Link>
           <div className="flex items-center gap-4 text-[13px]">
             <Link href="/login" className="text-muted no-underline hover:text-heading">Sign in</Link>
             <Link href="/get-started" className="rounded-md bg-cta px-4 py-2 font-medium text-cta-fg no-underline">Get started</Link>
