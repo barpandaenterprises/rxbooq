@@ -24,9 +24,9 @@ const QUOTES: Quote[] = [
 
 export function PlatformTestimonials() {
   return (
-    <section className="bg-white py-14 md:py-24">
+    <section className="bg-white py-12 md:py-16">
       <div className="mx-auto max-w-[1200px] px-5 md:px-8">
-        <header className="mx-auto mb-10 max-w-[640px] text-center md:mb-12">
+        <header className="mx-auto mb-8 max-w-[640px] text-center md:mb-10">
           <span className="mb-3 inline-flex items-center rounded-pill bg-[#FFF5F5] px-3 py-1 text-[12px] font-medium text-cta md:text-[13px]">
             Loved by clinics
           </span>

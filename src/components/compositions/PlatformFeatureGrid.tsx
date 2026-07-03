@@ -1,34 +1,33 @@
 const FEATURES: { icon: string; title: string; desc: string; brand?: boolean }[] = [
   {
     icon:  "fa-globe",
-    title: "Public clinic profile",
-    desc:  "Every clinic gets a fast, SEO-friendly profile page patients can find and share. Free, forever.",
+    title: "Build Your Online Presence",
+    desc:  "Professional profile, website, domain, and hosting — all in one place.",
   },
   {
     icon:  "fa-calendar-check",
-    title: "Online scheduling",
-    desc:  "Patients self-book in seconds. Per-doctor availability, holiday overrides, no double-booking.",
+    title: "Accept Online Appointments",
+    desc:  "Let patients book appointments anytime with a seamless scheduling experience.",
   },
   {
-    icon:  "fa-file-prescription",
-    title: "Digital prescriptions & EMR",
-    desc:  "Issue prescriptions, track history, and store clinical notes — searchable and exportable.",
+    icon:  "fa-notes-medical",
+    title: "Manage Your Practice Digitally",
+    desc:  "Store patient records securely and manage consultations efficiently.",
   },
   {
-    icon:  "fa-whatsapp",
-    title: "WhatsApp reminders & broadcasts",
-    desc:  "Native Indian-mobile channel. Templates approved, reminders auto-sent, broadcasts gated by plan.",
-    brand: true,
+    icon:  "fa-search",
+    title: "Get Found on Google",
+    desc:  "Improve visibility with local SEO and Google Business optimization.",
   },
   {
-    icon:  "fa-users-cog",
-    title: "Multi-doctor & departments",
-    desc:  "Add doctors, group by department, set per-doctor schedules. Scales from solo to multi-specialty.",
+    icon:  "fa-chart-line",
+    title: "Grow Your Patient Base",
+    desc:  "Attract more patients with digital marketing and reputation management.",
   },
   {
-    icon:  "fa-rupee-sign",
-    title: "GST-ready Razorpay billing",
-    desc:  "Subscriptions in INR with UPI / eMandate. Coupons and partner referrals built in.",
+    icon:  "fa-shield-alt",
+    title: "Secure & Reliable Platform",
+    desc:  "Fast hosting, SSL security, and dedicated support for peace of mind.",
   },
 ];
 
@@ -41,10 +40,10 @@ export function PlatformFeatureGrid() {
             Features
           </span>
           <h2 className="mb-2.5 text-[28px] font-semibold leading-[1.15] tracking-[-0.01em] text-heading md:text-[36px]">
-            Everything a clinic needs. Nothing it doesn&apos;t.
+            The Complete Digital Platform for Healthcare
           </h2>
           <p className="text-[14px] leading-[22px] text-muted md:text-[16px]">
-            Built specifically for Indian clinics — solo practitioners, multi-doctor practices, and hospitals.
+            Everything you need to attract more patients, build your online presence, manage appointments, and grow your practice — all from one platform.
           </p>
         </header>
 

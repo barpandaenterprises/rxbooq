@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { PlatformSiteFooter } from "@/components/compositions/PlatformSiteFooter";
 
 export const metadata = {
   title: "Get started — Rxbooq",
@@ -8,7 +9,7 @@ export const metadata = {
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#fafbfc] text-body">
+    <div className="flex min-h-screen flex-col bg-[#fafbfc] text-body">
       <header className="border-b border-border bg-white">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
           <Link href="/" className="flex flex-none items-center no-underline">
@@ -29,7 +30,8 @@ export default function OnboardingLayout({ children }: { children: React.ReactNo
           </Link>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-10 md:py-16">{children}</main>
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 md:py-16">{children}</main>
+      <PlatformSiteFooter />
     </div>
   );
 }

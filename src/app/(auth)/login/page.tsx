@@ -1,3 +1,5 @@
+import Image from "next/image";
+import Link from "next/link";
 import { headers } from "next/headers";
 import { LoginForm } from "./login-form";
 import { getClinicByHostOrSlug } from "@/lib/supabase/clinics";
@@ -50,22 +52,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           }}
         />
 
-        <div className="relative">
-          <div className="flex items-center gap-3">
-            <span className="grid h-11 w-11 place-items-center rounded-md bg-white/15 text-[20px] ring-1 ring-white/20 backdrop-blur">
-              <i className="fas fa-stethoscope" />
-            </span>
-            <div className="leading-tight">
-              <div className="text-[18px] font-semibold">{clinicName}</div>
-              {clinic && (
-                <div className="text-[12px] text-white/60">
-                  Powered by Rxbooq
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
         <div className="relative max-w-md">
           <h2 className="text-[40px] font-semibold leading-[48px]">
             Better care, less paperwork.
@@ -94,13 +80,27 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       {/* Form panel */}
       <section className="flex items-center justify-center bg-surface-muted px-4 py-10 sm:px-6 lg:bg-surface lg:py-16">
         <div className="w-full max-w-[400px]">
-          {/* Mobile-only brand bar */}
-          <div className="mb-8 flex items-center justify-center gap-2.5 lg:hidden">
-            <span className="grid h-10 w-10 place-items-center rounded-md bg-brand text-[18px] text-brand-fg">
-              <i className="fas fa-stethoscope" />
-            </span>
-            <div className="text-[16px] font-semibold text-heading">{clinicName}</div>
-          </div>
+          {/* Rxbooq logo — present on every login, all breakpoints */}
+          <Link href="/" className="mb-8 flex justify-center no-underline">
+            <Image
+              src="/images/logo/rxbooq-logo.png"
+              alt="Rxbooq"
+              width={180}
+              height={46}
+              priority
+              className="h-9 w-auto"
+            />
+          </Link>
+
+          {/* Mobile-only clinic context bar (tenant logins only) */}
+          {clinic && (
+            <div className="mb-6 flex items-center justify-center gap-2.5 lg:hidden">
+              <span className="grid h-9 w-9 place-items-center rounded-md bg-brand text-[16px] text-brand-fg">
+                <i className="fas fa-stethoscope" />
+              </span>
+              <div className="text-[15px] font-semibold text-heading">{clinicName}</div>
+            </div>
+          )}
 
           <div className="rounded-lg border border-border bg-surface p-7 shadow-[0_4px_24px_-8px_rgba(15,23,42,0.10)] md:p-8">
             <div className="mb-6">
@@ -126,10 +126,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <p className="mt-5 text-center text-[12px] text-muted">
             Need help signing in?{" "}
             <a
-              href="tel:+918260222828"
+              href="tel:+918660394376"
               className="text-link-hover hover:underline"
             >
-              +91 82602 22828
+              +91 86603 94376
             </a>
           </p>
         </div>
