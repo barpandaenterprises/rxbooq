@@ -28,13 +28,6 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   },
 ];
 
-const SOCIALS: { icon: string; label: string; href: string }[] = [
-  { icon: "facebook-f", label: "Facebook",  href: "#" },
-  { icon: "instagram",  label: "Instagram", href: "#" },
-  { icon: "linkedin-in", label: "LinkedIn", href: "#" },
-  { icon: "whatsapp",   label: "WhatsApp",  href: "https://wa.me/918660394376" },
-];
-
 export function PlatformSiteFooter() {
   const year = new Date().getFullYear();
   return (
@@ -56,19 +49,6 @@ export function PlatformSiteFooter() {
               Modern clinic software for India — public profile, online booking, EMR, and WhatsApp
               engagement, wired together and billed in INR.
             </p>
-            <div className="mt-5 flex gap-2.5">
-              {SOCIALS.map((s) => (
-                <a
-                  key={s.label}
-                  href={s.href}
-                  {...(s.href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
-                  aria-label={s.label}
-                  className="grid h-9 w-9 place-items-center rounded-pill bg-white/10 text-white no-underline transition-colors hover:bg-white/20"
-                >
-                  <i className={`fab fa-${s.icon} text-[14px]`} />
-                </a>
-              ))}
-            </div>
           </div>
 
           {/* Link columns */}

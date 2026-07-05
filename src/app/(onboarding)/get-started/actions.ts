@@ -731,21 +731,24 @@ export async function finalizeOnboardingAction(input: FinalizeInput): Promise<Fi
   const supabase = serviceClient();
 
   // Default plan: the wizard no longer has a plan-picker step, so every new
-  // clinic starts on Free Listing (code='free'). They can upgrade later from
+  // clinic starts on the entry-level active plan (currently Essential Care).
+  // The Free tier is retired, so we resolve the cheapest active plan by
+  // sort_order rather than a hard-coded code. They can upgrade later from
   // /admin/settings/billing. Resolve it up-front so we fail before creating an
-  // auth user if the plan catalog is somehow missing the free tier.
+  // auth user if the plan catalog is somehow empty.
   let planId = draft.selected_plan_id;
   if (!planId) {
-    const { data: freePlan } = await supabase
+    const { data: starterPlan } = await supabase
       .from("subscription_plans")
       .select("id")
-      .eq("code", "free")
       .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .limit(1)
       .maybeSingle();
-    if (!freePlan) {
+    if (!starterPlan) {
       return { ok: false, error: "No starter plan is available. Please contact support." };
     }
-    planId = freePlan.id;
+    planId = starterPlan.id;
   }
 
   // Backfill primary_email from the finalize form if the user skipped the
