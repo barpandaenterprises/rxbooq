@@ -7,6 +7,7 @@ import { PlatformHowItWorks } from "@/components/compositions/PlatformHowItWorks
 import { PlatformPlansTeaser } from "@/components/compositions/PlatformPlansTeaser";
 import { PlatformTestimonials } from "@/components/compositions/PlatformTestimonials";
 import { PlatformCtaStrip } from "@/components/compositions/PlatformCtaStrip";
+import { PlatformLeadCapture } from "@/components/compositions/PlatformLeadCapture";
 
 /**
  * Apex root — platform marketing site only.
@@ -39,6 +40,7 @@ export default function Home() {
       <PlatformPlansTeaser />
       <PlatformTestimonials />
       <PlatformCtaStrip />
+      <PlatformLeadCapture />
     </PlatformSiteLayout>
   );
 }

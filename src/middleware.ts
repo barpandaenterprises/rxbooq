@@ -103,28 +103,45 @@ export async function middleware(req: NextRequest) {
   let response = NextResponse.next({ request: req });
 
   // ---- Supabase session refresh -------------------------------------------
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
-          response = NextResponse.next({ request: req });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          );
-        },
-      },
-    },
-  );
+  // Fail safe: a missing/invalid Supabase env var makes createServerClient
+  // throw, and getUser() can fail on a transient network error. Either would
+  // otherwise crash the Edge middleware (MIDDLEWARE_INVOCATION_FAILED) and
+  // 500 *every* matched route, including public pages. Instead we swallow the
+  // error, treat the request as unauthenticated, and let the auth gate below
+  // decide: public paths fall through and render, protected paths redirect to
+  // /login — so a config outage degrades gracefully instead of downing the site.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: { id: string } | null = null;
+
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll() {
+            return req.cookies.getAll();
+          },
+          setAll(cookiesToSet: CookieToSet[]) {
+            cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
+            response = NextResponse.next({ request: req });
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options),
+            );
+          },
+        },
+      });
+
+      const { data } = await supabase.auth.getUser();
+      user = data.user;
+    } catch (err) {
+      console.error("[middleware] Supabase session refresh failed:", err);
+    }
+  } else {
+    console.error(
+      "[middleware] Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY — treating request as unauthenticated.",
+    );
+  }
 
   // ---- Auth gate ----------------------------------------------------------
   if (isProtectedPath(pathname) && !user) {

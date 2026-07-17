@@ -1,5 +1,6 @@
 import { PlatformSiteHeader } from "@/components/compositions/PlatformSiteHeader";
 import { PlatformSiteFooter } from "@/components/compositions/PlatformSiteFooter";
+import { PlatformWhatsAppFab } from "@/components/compositions/PlatformWhatsAppFab";
 
 /**
  * Apex marketing wrapper. Renders on rxbooq.com (when no tenant is
@@ -12,6 +13,7 @@ export function PlatformSiteLayout({ children }: { children: React.ReactNode }) 
       <PlatformSiteHeader />
       <main>{children}</main>
       <PlatformSiteFooter />
+      <PlatformWhatsAppFab />
     </div>
   );
 }

@@ -11,6 +11,7 @@ export type SuperAdminNavKey =
   | "Plans"
   | "Subscriptions"
   | "Coupons"
+  | "Leads"
   | "Usage"
   | "Templates"
   | "Audit log"
@@ -30,6 +31,7 @@ const NAV_ITEMS: Array<{
   { ic: "fa-layer-group",    label: "Plans",            href: "/superadmin/plans" },
   { ic: "fa-rupee-sign",     label: "Subscriptions",    href: "/superadmin/subscriptions" },
   { ic: "fa-tag",            label: "Coupons",          href: "/superadmin/coupons" },
+  { ic: "fa-bullseye",       label: "Leads",            href: "/superadmin/leads" },
   { ic: "fa-chart-area",     label: "Usage",            href: "#" },
   { ic: "fa-comment-dots",   label: "Templates",        href: "#" },
   { ic: "fa-history",        label: "Audit log",        href: "#" },

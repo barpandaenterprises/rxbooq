@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { PlatformTalkToUsButton } from "@/components/compositions/PlatformTalkToUsButton";
+
 const NAV_ITEMS = [
   { label: "Features",  href: "/#features" },
   { label: "Pricing",   href: "/pricing" },
@@ -34,7 +36,7 @@ export function PlatformSiteHeader() {
           ))}
         </div>
 
-        <div className="ml-auto flex items-center gap-3 md:gap-4">
+        <div className="ml-auto flex items-center gap-2.5 md:gap-4">
           <Link
             href="/login"
             prefetch={false}
@@ -42,12 +44,14 @@ export function PlatformSiteHeader() {
           >
             Sign in
           </Link>
+          <PlatformTalkToUsButton />
           <Link
             href="/get-started"
             className="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-cta px-[18px] py-2 text-[14px] font-medium text-cta-fg no-underline transition-colors hover:bg-[#d92843]"
           >
             <i className="fas fa-rocket text-[12px]" />
-            Get started
+            <span className="hidden sm:inline">Get started</span>
+            <span className="sm:hidden">Start</span>
           </Link>
         </div>
       </div>

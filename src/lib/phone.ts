@@ -12,6 +12,21 @@ export function isE164(s: string): boolean {
 }
 
 /**
+ * Strict validity check for an Indian mobile number, tolerant of how people
+ * actually type them (spaces, dashes, +91 / 91 / 0 prefixes).
+ *
+ * Rule: after stripping non-digits and any country/trunk prefix, the number is
+ * exactly 10 digits and starts 6–9 (the valid Indian mobile range). Landlines
+ * and short codes are intentionally rejected — this gates the lead form.
+ */
+export function isIndianMobile(raw: string): boolean {
+  let digits = raw.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  else if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
+  return /^[6-9]\d{9}$/.test(digits);
+}
+
+/**
  * Best-effort normalize a user-typed number to E.164, defaulting to India.
  *  - "+919876543210"  → "+919876543210"
  *  - "9876543210"     → "+919876543210"
@@ -21,7 +36,9 @@ export function isE164(s: string): boolean {
  */
 export function toE164(raw: string): string {
   const trimmed = raw.trim();
-  const digits  = trimmed.replace(/\D/g, "");
+  let   digits  = trimmed.replace(/\D/g, "");
+  // Drop a domestic trunk "0" prefix (e.g. "098765…") so it maps to +91.
+  if (digits.length === 11 && digits.startsWith("0")) digits = digits.slice(1);
   if (digits.length === 12 && digits.startsWith("91")) return `+${digits}`;
   if (digits.length === 10) return `+91${digits}`;
   if (digits.length > 10) return `+${digits}`;
